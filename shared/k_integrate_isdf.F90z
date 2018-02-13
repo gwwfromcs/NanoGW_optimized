@@ -1,0 +1,333 @@
+#include "../shared/mycomplex.h"
+!===================================================================
+!
+! Calculates the kernel in parallel and stores in structures k_tmp.
+! Several k_tmp structures are calculated, as many as necessary to
+! cover the kernel in k_mat.
+!
+! Copyright (C) 2009 Murilo L. Tiago, http://users.ices.utexas.edu/~mtiago
+! This file is part of RGWBS. It is distributed under the GPL v1.
+!
+!-------------------------------------------------------------------
+subroutine Zk_integrate_isdf(gvec,kpt,k_mat,k_tmp,irp,kflag,nspin,nbuff_max,qkt_in, &
+  Cmtrx, Mmtrx, n_intp, maxc, maxv, maxncv, pairmap)
+
+  use typedefs
+  use mpi_module
+  use fft_module
+  use xc_functionals
+  implicit none
+#ifdef MPI
+  include 'mpif.h'
+#endif
+
+  ! arguments
+  ! real-space grid
+  type (gspace), intent(inout) :: gvec
+  ! k-points and electron wavefunctions
+  type (kptinfo), intent(in) :: kpt
+  ! kernel
+  type (kernelinfo), intent(in) :: k_mat
+  ! temporary space where integrals are stored
+  type (kernel_scratch), intent(inout) :: k_tmp(nbuff_max)
+  ! current representation, kernel flag (see parent routine),
+  ! number of spin channels, buffer size
+  integer, intent(in) :: irp, kflag, nspin, nbuff_max, n_intp, & 
+    maxc, maxv, maxncv, pairmap(maxv, maxc, nspin,kpt%nk)
+  ! current q-vector
+  real(dp), intent(in) :: qkt_in(3)
+  ! C matrix 
+  real(dp), intent(in) :: Cmtrx(n_intp, maxncv, nspin, kpt%nk)
+  ! Mmtrix 
+  real(dp), intent(in) :: Mmtrx(n_intp, n_intp, nspin, kpt%nk)
+
+
+  ! local variables
+  type(xc_type) :: xc_lda
+  real(dp), parameter :: tol_l = 1.d-8
+  character (len=800) :: lastwords
+  logical :: sympair, lphase
+#ifndef CPLX
+  logical :: outflag
+#endif
+  integer :: ii, jj, nn, m1, m2, m3, m4, k1, k2, k3, k4, iblock, &
+       isp, i_row, ipe, jcount, dicount, ipe_count, &
+       icc, ngrid, ngrid_pe, info, mycount, ncount, ncache, rsp, csp, &
+       startrow(2), endrow(2), startcol(2), endcol(2)
+  real(dp) :: tsec(2)
+
+  integer, dimension(:,:), allocatable :: ipe_quadr
+  ! external functions (BLAS)
+  SCALAR, external :: Zdot_c
+
+  ! WG debug
+  integer :: outdbg, icv1, icv2
+  real(dp) :: alpha, beta, tmpvec(n_intp)
+
+  outdbg = peinf%inode+198812
+
+  ngrid_pe = w_grp%ldn * w_grp%npes
+  ngrid = w_grp%mydim
+  write(outdbg,*) " ngrid_pe = w_grp%ldn * w_grp%npes = ", ngrid_pe
+  write(outdbg,*) " w_grp%npes = ", w_grp%npes
+  write(outdbg,*) " ngrid = w_grp%mydim = ", w_grp%mydim
+  write(outdbg,*) " w_grp%ldn = ", w_grp%ldn
+  write(outdbg,*) " k_mat%lcache = ", k_mat%lcache
+
+  !-------------------------------------------------------------------
+  ! Allocate data.
+  !
+  ncache = ngrid / k_mat%lcache
+  if ( ncache * k_mat%lcache < ngrid ) ncache = ncache + 1
+  write(outdbg,*) " ncache = ngrid / k_mat%lcache = ", ncache
+
+  iblock = 1
+  k_tmp(iblock)%nblock = 0
+  allocate(k_tmp(iblock)%quadr(10,k_tmp(iblock)%nblock_max))
+  k_tmp(iblock)%quadr = 0
+  allocate(k_tmp(iblock)%Zm_f(k_tmp(iblock)%nblock_max))
+  k_tmp(iblock)%Zm_f = Zzero
+  allocate(ipe_quadr(10,k_mat%ncol))
+  ipe_quadr = 0
+
+  ! WG debug 
+#ifdef DEBUG 
+  if (peinf%master) then
+    write(6,*) "dbg ngrid = ", ngrid
+    write(6,*) "dbg k_mat%lcache = ", k_mat%lcache
+    write(6,*) "dbg ncache = ", ncache
+    write(6,*) "dbg w_grp%ldn = ", w_grp%ldn
+  endif
+#endif
+
+  !-------------------------------------------------------------------
+  ! Start calculating rows of kernel matrix elements from the end:
+  ! first PE receives last row, second PE receives the previous
+  ! one, until all rows are calculated.
+  ! This procedure helps load balance: longer rows are likely to
+  ! be done before shorter ones, and each PE receives an equal
+  ! amount of long and short rows.
+  !
+  startrow(1) = 1
+  endrow(1) = k_mat%nrow_up
+  startrow(2) = k_mat%nrow_up + 1
+  endrow(2) = k_mat%nrow
+  startcol(1) = 1
+  endcol(1) = k_mat%ncol_up
+  startcol(2) = k_mat%ncol_up + 1
+  endcol(2) = k_mat%ncol
+  write(outdbg, '(a,I6)') " startrow(1) = ", startrow(1)
+  write(outdbg, '(a,I6)') " endrow(1) = ", endrow(1)
+  write(outdbg, '(a,I6)') " startcol(1) = ", startcol(1)
+  write(outdbg, '(a,I6)') " endcol(1) = ", endcol(1)
+  write(outdbg, '(a,I6)') " startrow(2) = ", startrow(2)
+  write(outdbg, '(a,I6)') " endrow(2) = ", endrow(2)
+  write(outdbg, '(a,I6)') " startcol(2) = ", startcol(2)
+  write(outdbg, '(a,I6)') " endcol(2) = ", endcol(2)
+  write(outdbg, '(2(a,I6))') " peinf%inode = ", peinf%inode, ", w_grp%mygr = ", w_grp%mygr
+
+  ! Go over the blocks of spin matrices.
+  ncount = 0
+  jcount = 0
+  do rsp = 1, nspin
+     do csp = 1, nspin
+        write(outdbg, '(A, I6, A, I6)') ' - loop rsp =',rsp,' csp =', csp
+        do i_row = startrow(rsp), endrow(rsp), r_grp%npes
+           write(outdbg, '(a,I6)') " -- loop i_row = ", i_row
+           ! Determine which pairs (m3,m4) will be included.
+           ! Indices for the important pairs will be stored in
+           ! quadr(:,jcount+1:jcount+mycount).
+           mycount = 0
+           ii = w_grp%mygr*w_grp%npes + i_row + w_grp%inode
+           if (ii <= endrow(rsp)) then
+              m1 = k_mat%row(1,ii)
+              m2 = k_mat%row(2,ii)
+              k1 = k_mat%row(3,ii)
+              k2 = k_mat%row(4,ii)
+              sympair = .false.
+              if (rsp == csp) then
+                 do jj = startcol(rsp), endcol(rsp)
+                    if (k_mat%col(1,jj) == m1 .and. k_mat%col(2,jj) == m2 &
+                         .and. k_mat%col(3,jj) == k1 .and. k_mat%col(4,jj) == k2) then
+                       sympair = .true.
+                       exit
+                    endif
+                 enddo
+              endif
+              do jj = startcol(csp), endcol(csp)
+                 m3 = k_mat%col(1,jj)
+                 m4 = k_mat%col(2,jj)
+                 k3 = k_mat%col(3,jj)
+                 k4 = k_mat%col(4,jj)
+                 ! Apply symmetrizations to quadruplet (m1,m2,m3,m4) 
+                 ! and skip this matrix element if a similar one is calculated.
+#ifndef CPLX
+                 call select1234(k_mat,gvec%syms,m1,m2,m3,m4,csp, &
+                      kpt%wfn(rsp,k1)%jrep(0,m1), &
+                      kpt%wfn(rsp,k2)%jrep(0,m2), &
+                      kpt%wfn(csp,k3)%jrep(0,m3), &
+                      kpt%wfn(csp,k4)%jrep(0,m4), &
+                      sympair,outflag)
+                 if (.not.outflag) cycle
+#endif
+                 mycount = mycount + 1
+                 if (jcount+mycount > k_tmp(iblock)%nblock_max) then
+                    write(lastwords,*) 'ERROR: buffer size too small! ', &
+                         jcount+mycount, k_tmp(iblock)%nblock_max, iblock
+                    call die(lastwords)
+                 endif
+
+                 k_tmp(iblock)%quadr(1,jcount+mycount) = m1
+                 k_tmp(iblock)%quadr(2,jcount+mycount) = m2
+                 k_tmp(iblock)%quadr(3,jcount+mycount) = m3
+                 k_tmp(iblock)%quadr(4,jcount+mycount) = m4
+                 k_tmp(iblock)%quadr(5,jcount+mycount) = k1
+                 k_tmp(iblock)%quadr(6,jcount+mycount) = k2
+                 k_tmp(iblock)%quadr(7,jcount+mycount) = k3
+                 k_tmp(iblock)%quadr(8,jcount+mycount) = k4
+                 k_tmp(iblock)%quadr(9,jcount+mycount) = rsp
+                 k_tmp(iblock)%quadr(10,jcount+mycount) = csp
+                 write(outdbg, '(A, I6, A, 4I6)') " --- mycount: ", mycount, ", calculate", m1,m2,m3,m4
+              enddo ! do jj = startcol, endcol
+           endif ! if ii <= endrow(rsp)
+           ipe_count = mycount
+           ipe_quadr(1:10,1:mycount) = &
+              k_tmp(iblock)%quadr(1:10,jcount+1:jcount+mycount)
+  ! Calculate kernel matrix elements involving pair (m3,m4).
+           write(outdbg, '(A)') " -- start to calculate matrix elements involving pair m3,m4 --- "
+           call timacc(13,1,tsec)
+
+           do dicount = 1, ipe_count
+              m1 = ipe_quadr(1,dicount)
+              m2 = ipe_quadr(2,dicount)
+              m3 = ipe_quadr(3,dicount)
+              m4 = ipe_quadr(4,dicount)
+              k1 = ipe_quadr(5,dicount)
+              k2 = ipe_quadr(6,dicount)
+              k3 = ipe_quadr(7,dicount)
+              k4 = ipe_quadr(8,dicount)
+              write(outdbg, '(A,I5,A,4I5)') " ----- dicount", dicount, ", m1 m2 m3 m4", m1,m2,m3,m4
+              
+              ! m1, m2, m3, m4 are the real band index in parsec.dat
+              ! pairmap maps the val and cond index to pair index in Cmtrx
+              icv1 = pairmap(m1,m2,rsp,k1) ! assume k1 == k2, this is valid for confined systems
+              icv2 = pairmap(m3,m4,csp,k3) ! assume k3 == k4
+              ! Mmtrx dimension: Mmtrx(n_intp, n_intp)
+              ! Cmtrx dimension: Cmtrx(n_intp, maxncv)
+              ! calculate: tmpvec(1:n_intp) = Mmtrx(1:n_intp, 1:n_intp) * Cmtrx(1:n_intp, icv1)
+              write(outdbg, '(A,i5,A,i5)') " icv1 = ", icv1, " icv2 = ", icv2
+              call dgemv('n',n_intp,n_intp,one,Mmtrx,n_intp,Cmtrx(1,icv1,rsp,k1),1,& 
+                zero,tmpvec,1)
+
+              !my_matrix(dicount) = my_matrix(dicount) + &
+              !     Zdot_c(nelem,fwfn123,1,kpt%wfn(csp,k4)%Zwf(istart,jj),1) * fac
+              ! calculate: Zm_f = tmpvec(1:n_intp) * Cmtrx(1:n_intp, icv2)
+              k_tmp(iblock)%Zm_f(jcount+dicount) =  & 
+                Zdot_c(n_intp,tmpvec,1,Cmtrx(1,icv2,csp,k3),1)
+
+           enddo ! do dicount loop
+
+           do dicount = 1, ipe_count
+              m1 = ipe_quadr(1,dicount)
+              m2 = ipe_quadr(2,dicount)
+              m3 = ipe_quadr(3,dicount)
+              m4 = ipe_quadr(4,dicount)
+              write(outdbg, '( i5,"  <",2i4,"|F|",2i4,">",e16.5)') dicount,m3,m4,m1,m2,k_tmp(iblock)%Zm_f(jcount+dicount)
+           enddo
+
+           write(outdbg, '(A)') " -- finished calculating matrix elements involving pair m3,m4 --- "
+           call timacc(13,2,tsec)
+           jcount = jcount + mycount
+           write(outdbg,'(A,I6)') " -- jcount = ", jcount
+  !
+  ! Are we close to filling up buffer arrays? If so, print out
+  ! calculated matrix elements.
+  !
+  ! jcount is a counter for the number of computed matrix elements before
+  ! last output on disk by the current PE
+  ! ncount is a cumulative counter of computed matrix elements
+  !
+           if (jcount+k_mat%ncol >= k_tmp(iblock)%nblock_max) then
+              k_tmp(iblock)%nblock = jcount
+              ncount = ncount + jcount
+              jcount = 0
+              if (r_grp%master) then
+                 call stopwatch(r_grp%master,' Kernel matrix calculation ')
+                 write(6,'(i10,a,i3,a,i2,a,2i2)') ncount, &
+                      ' matrix elements calculated by PE', &
+                      peinf%inode,' representation ',irp,' spin ',rsp, csp
+                 call flush(6)
+              endif
+
+              iblock = iblock + 1
+              if (iblock > nbuff_max) then
+                 write(lastwords,*) 'ERROR: too few buffer structures ! ', &
+                      iblock, nbuff_max
+                 call die(lastwords)
+              endif
+              k_tmp(iblock)%nblock = 0
+              allocate(k_tmp(iblock)%quadr(10,k_tmp(iblock)%nblock_max),stat=info)
+              write(lastwords,'(a,i5.5)') 'k_tmp%quadr_',iblock
+              call alccheck(trim(lastwords),'k_integrate', &
+                   10*k_tmp(iblock)%nblock_max,info)
+              k_tmp(iblock)%quadr = 0
+              allocate(k_tmp(iblock)%Zm_f(k_tmp(iblock)%nblock_max),stat=info)
+              write(lastwords,'(a,i5.5)') 'k_tmp%m_f_',iblock
+              call alccheck(trim(lastwords),'k_integrate', &
+                   k_tmp(iblock)%nblock_max,info)
+              k_tmp(iblock)%Zm_f = Zzero
+           endif
+        enddo ! do i_row = startrow(rsp), endrow(rsp), r_grp%npes
+        !
+        !  Finished!
+        !  Write last computed matrix elements to disk.
+        !
+        k_tmp(iblock)%nblock = jcount
+        ncount = ncount + jcount
+        jcount = 0
+
+        iblock = iblock + 1
+        if (iblock > nbuff_max) then
+           write(lastwords,*) 'ERROR: too few buffer structures ! ', &
+                iblock, nbuff_max
+           call die(lastwords)
+        endif
+        k_tmp(iblock)%nblock = 0
+        allocate(k_tmp(iblock)%quadr(10,k_tmp(iblock)%nblock_max),stat=info)
+        write(lastwords,'(a,i5.5)') 'k_tmp%quadr_',iblock
+        call alccheck(trim(lastwords),'k_integrate', &
+             10*k_tmp(iblock)%nblock_max,info)
+        k_tmp(iblock)%quadr = 0
+        allocate(k_tmp(iblock)%Zm_f(k_tmp(iblock)%nblock_max),stat=info)
+        write(lastwords,'(a,i5.5)') 'k_tmp%m_f',iblock
+        call alccheck(trim(lastwords),'k_integrate', &
+             k_tmp(iblock)%nblock_max,info)
+        k_tmp(iblock)%Zm_f = Zzero
+     enddo ! do csp
+  enddo ! do rsp
+  !-------------------------------------------------------------------
+  ! Deallocate data, do printout, etc.
+  !
+  if (r_grp%master) then
+     write(6,'(a,i10,a,a,i3,a,i2)') 'Kernel done! ',ncount,' matrix ', &
+          'elements calculated by PE',peinf%inode,' representation ',irp
+     write(6,*) 'Buffer sizes: ',iblock
+     write(6,*) (k_tmp(nn)%nblock,nn=1,iblock)
+     write(6,*)
+     write(6,*) (k_tmp(nn)%nblock_max,nn=1,iblock)
+     write(6,*)
+     call flush(6)
+  endif
+  write(outdbg,'(a,i10)') 'peinf%inode', peinf%inode
+  write(outdbg,'(a,i10,a,a,i3,a,i2)') 'Kernel done! ',ncount,' matrix ', &
+        'elements calculated by PE',peinf%inode,' representation ',irp
+  write(outdbg,*) 'Buffer sizes: ',iblock
+  write(outdbg,*) (k_tmp(nn)%nblock,nn=1,iblock)
+  write(outdbg,*)
+  write(outdbg,*) (k_tmp(nn)%nblock_max,nn=1,iblock)
+  write(outdbg,*)
+
+  deallocate(ipe_quadr)
+
+end subroutine Zk_integrate_isdf
+!===================================================================
