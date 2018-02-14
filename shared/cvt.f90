@@ -66,12 +66,12 @@ subroutine cvt(gvec, rho, nspin, n_intp, intp)
  ! write(outdbg,*) bounds(1,1:3)
  ! write(outdbg,*) bounds(2,1:3)
 
- ! generate initial guess of interpolation points
- write(outdbg,*) " Initial guess of interpolation points "
  !rseed = time()
  rseed = 1518543090
- write(outdbg,*) " rseed for random number generator is: ", rseed
+ write(outdbg,'(a,i20)') "# rseed for random number generator is: ", rseed
  call srand(rseed)
+ ! generate initial guess of interpolation points
+ write(outdbg,'(a)') "# Initial guess of interpolation points "
  do ipt = 1, n_intp
     do ii = 1,3
         ! generate some random points in the full grids
@@ -79,8 +79,8 @@ subroutine cvt(gvec, rho, nspin, n_intp, intp)
         ! boundary
         pts(ii,ipt) = bounds(1,ii) + rand(0)*0.9*(bounds(2,ii)-bounds(1,ii)) 
     enddo
-    ! print out the random interpolation points
-    write(outdbg,'(3f10.4)') pts(1:3,ipt)
+    ! print out the intial random interpolation points
+    write(outdbg,'("# ",3f10.4)') pts(1:3,ipt)
  enddo
 
  ! perform centroidal voronoi tesselation (CVT) algorithm
@@ -178,7 +178,8 @@ subroutine cvt(gvec, rho, nspin, n_intp, intp)
  enddo ! iter
  
  do ipt = 1, n_intp
-    write(outdbg,'(6f8.3)') pts(1:3,ipt), fullgrid(1:3,intp(ipt))
+    write(outdbg,'(9f8.3)') pts(1:3,ipt), fullgrid(1:3,intp(ipt)), &
+    fullgrid(1:3,intp(ipt))*0.529177+ 4.1011
  enddo
 
  close(outdbg) ! close the dbg file

@@ -79,7 +79,7 @@ program tdlda
   call input_g(pol_in,qpt,tdldacut,nbuff,lcache,w_grp%npes, &
        nolda,tamm_d,r_grp%num, dft_code)
   if(peinf%master) write (*,*) " input_g done"
-  call input_t(tamm_d,rpaonly,trip_flag,noxchange,trunc_c,doisdf)
+  call input_t(tamm_d,rpaonly,trip_flag,noxchange,trunc_c,doisdf,n_intp)
   !-------------------------------------------------------------------
   ! Determine the set of wavefunctions to read: if n-th wavefunction is
   ! needed, then wmap(n) = .true.; otherwise, wmap(n) = .false.
@@ -143,16 +143,20 @@ program tdlda
   ! W Gao calculate_zeta dbg
   ihomo = 1
   do isp = 1, nspin
-    do ikp = 1, kpt%nk
-       do ii = 1, kpt%wfn(isp,ikp)%nstate
-          if ( kpt%wfn(isp,ikp)%occ0(ii) > tol_occ .and. &
-               ihomo < ii) then
-             ihomo = ii
-          endif
-       enddo ! ii loop
-    enddo ! ikp loop
+     do ikp = 1, kpt%nk
+        do ii = 1, kpt%wfn(isp,ikp)%nstate
+           if ( kpt%wfn(isp,ikp)%occ0(ii) > tol_occ .and. &
+                ihomo < ii) then
+              ihomo = ii
+           endif
+        enddo ! ii loop
+     enddo ! ikp loop
   enddo ! isp loop
-  n_intp = 4.0 * ihomo
+  ! if n_intp can not be found in rgwbs.in or invalid (i.e., less than the
+  ! number of occupied states), then set it to a default value
+  if(n_intp .lt. ihomo) then 
+     n_intp = int(2.0 * ihomo)
+  endif
   allocate(intp(n_intp))
   if (peinf%master) then
      write(*,*) 'The master processor calls cvt to find interpolation points.'
@@ -162,7 +166,7 @@ program tdlda
   !call MPI_bcast(intp(1),n_intp,MPI_INTEGER, peinf%masterid,peinf%comm,errinfo)
   if (peinf%master) write(*,*) 'call isdf subroutine'
   do isp = 1, nspin
-    ncv(isp) = pol_in(isp)%nval * pol_in(isp)%ncond
+     ncv(isp) = pol_in(isp)%nval * pol_in(isp)%ncond
   enddo
 
   maxncv = max(ncv(1), ncv(2))

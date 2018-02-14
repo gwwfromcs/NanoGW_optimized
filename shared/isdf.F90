@@ -72,8 +72,14 @@ subroutine isdf(gvec, pol_in, kpt, n_intp, intp, nspin, ncv, maxncv, Cmtrx, Mmtr
              IVV, ICC, JVV, JCC, itrans, isp, ikp, errinfo, igrid, &
              iproc, tag
   integer :: status(MPI_STATUS_SIZE)
-  integer :: workgroup, workproc
+  ! The index of w_grp, r_grp, processor that works on the calculation of
+  ! zeta(:,:,nspin,nk)
+  integer :: workwgrp, workrgrp, workproc
+  ! Each processor in a w_grp store part of the wave function
+  ! offset: index of grid point from which a processor start to store the wave function
+  ! ncount: number of elements of wave functions that a processor stores
   integer, dimension(0:w_grp%npes-1) :: offset, ncount
+  ! temporary dummy variable
   integer, dimension(0:w_grp%npes-1) :: idum
   ! the number of grid points in irreducible wedge, ngr = gvec%nr
   integer :: ngr 
@@ -85,11 +91,14 @@ subroutine isdf(gvec, pol_in, kpt, n_intp, intp, nspin, ncv, maxncv, Cmtrx, Mmtr
   integer :: dbgunit = 20171130
   ! external functions
   real(dp), external :: ddot
-
-  ngr = gvec%nr
-  ngf = gvec%nr * gvec%syms%ntrans
-  allocate(Zmtrx_distr(w_grp%mydim))
-  Cmtrx = 0
+  
+  ! the number of grid points in irreducible realspace domain
+  ngr = gvec%nr 
+  ! the number of grid points in full domain
+  ngf = gvec%nr * gvec%syms%ntrans 
+  ! each processor store part of the Zmtrx
+  allocate(Zmtrx_distr(w_grp%mydim)) 
+  Cmtrx = 0 ! initialize Cmtrx
   if(peinf%master) then
     allocate(Zmtrx(ngf, maxncv, nspin, kpt%nk))
     allocate(zeta(ngf,n_intp,nspin,kpt%nk))
@@ -98,11 +107,15 @@ subroutine isdf(gvec, pol_in, kpt, n_intp, intp, nspin, ncv, maxncv, Cmtrx, Mmtr
     allocate(Bmtrx(n_intp, ngf))
     allocate(Xmtrx(n_intp, ngf))
     Zmtrx = 0
-    workgroup = w_grp%mygr 
-    workproc  = w_grp%inode
-    write(*,*) "intp: ", (intp(ii), ii=1,n_intp)
+    ! we want peinf%master to collect Cmtrx and Zmtrix from other processors in
+    ! the w_grp
+    workrgrp = r_grp%mygr
+    workwgrp = w_grp%mygr
+    workproc = w_grp%inode ! the master proc should be zero?
+    write(*,'(a)') " Index of interpolation points: ", (intp(ii), ii=1,n_intp)
   endif
-  call MPI_BCAST(workgroup, 1, MPI_INTEGER, peinf%masterid, peinf%comm, errinfo)
+  call MPI_BCAST(workwgrp, 1, MPI_INTEGER, peinf%masterid, peinf%comm, errinfo)
+  call MPI_BCAST(workrgrp, 1, MPI_INTEGER, peinf%masterid, peinf%comm, errinfo)
   call MPI_BCAST(workproc, 1, MPI_INTEGER, peinf%masterid, peinf%comm, errinfo)
 
   idum = 0 
@@ -115,7 +128,7 @@ subroutine isdf(gvec, pol_in, kpt, n_intp, intp, nspin, ncv, maxncv, Cmtrx, Mmtr
   call MPI_ALLREDUCE(idum, ncount, w_grp%npes, MPI_INTEGER, MPI_SUM, &
     w_grp%comm, errinfo)
   
-  !write(*,*) 'w_grp%mygr', w_grp%mygr, ' w_grp%inode=',w_grp%inode, 'workgroup = ', workgroup
+  !write(*,*) 'w_grp%mygr', w_grp%mygr, ' w_grp%inode=',w_grp%inode, 'workgroup = ', workwgrp
   !write(*,*) 'w_grp%mygr', w_grp%mygr, ' w_grp%inode=',w_grp%inode, 'workproc = ', workproc
   !write(*,*) 'w_grp%mygr', w_grp%mygr, ' w_grp%inode=',w_grp%inode, " offset: ", (offset(ii),ii=0,w_grp%npes-1)
   !write(*,*) 'w_grp%mygr', w_grp%mygr, ' w_grp%inode=',w_grp%inode, " ncount: ", (ncount(ii),ii=0,w_grp%npes-1)
@@ -142,7 +155,7 @@ subroutine isdf(gvec, pol_in, kpt, n_intp, intp, nspin, ncv, maxncv, Cmtrx, Mmtr
               call dmultiply_vec(w_grp%mydim, &
                 kpt%wfn(isp,ikp)%dwf(1,JCC),Zmtrx_distr(1)) 
 
-              if (w_grp%mygr .eq. workgroup) then
+              if (w_grp%mygr .eq. workwgrp .and. r_grp%mygr .eq. workrgrp) then
                  ! peinf%master collect Zmtrx from other processors in w_grp
                  do iproc = 0, w_grp%npes-1
                     !write(*,*) "w_grp%inode ", w_grp%inode, " loop iproc = ", iproc
@@ -162,7 +175,6 @@ subroutine isdf(gvec, pol_in, kpt, n_intp, intp, nspin, ncv, maxncv, Cmtrx, Mmtr
                  enddo
               endif
 
-              !if(peinf%master) write(*,*) ' d'
               if(peinf%master) then
                  igrid = 0
                  do ipt = 1, gvec%nr
@@ -173,7 +185,7 @@ subroutine isdf(gvec, pol_in, kpt, n_intp, intp, nspin, ncv, maxncv, Cmtrx, Mmtr
                     enddo ! itrans
                  enddo ! ipt
                  
-                 do ipt = 1, n_intp
+                 do ipt = 1, n_intp ! intp maps 
                     Cmtrx(ipt, icv, isp, ikp) = Zmtrx(intp(ipt), icv, isp, ikp)
                  enddo
               endif
@@ -236,6 +248,7 @@ subroutine isdf(gvec, pol_in, kpt, n_intp, intp, nspin, ncv, maxncv, Cmtrx, Mmtr
 
   write(*,*) 'peinf%inode', peinf%inode
   ! clean up all the allocatable variables
+  deallocate(Zmtrx_distr)
   if (peinf%master) then
      write(*,*) " deallocate arrays"
      deallocate(Zmtrx_loc)
@@ -247,18 +260,18 @@ subroutine isdf(gvec, pol_in, kpt, n_intp, intp, nspin, ncv, maxncv, Cmtrx, Mmtr
   if (outputdbg .and. peinf%master) then
      write(*,*) "output to zeta_dbg.dat"
      open(dbgunit, file=dbg_filename, form='formatted',status='replace')
-     !do igrid = 1, 5
-     !   write(dbgunit,'(2x,3f20.8)') zeta(igrid,1,1,1), zeta(igrid,2,1,1), zeta(igrid,3,1,1)
-     !enddo
-     !write(dbgunit,'(" ... ")')
-     !do igrid = 5, 0, -1
-     !   write(dbgunit,'(2x,3f20.8)') zeta(ngf-igrid,1,1,1), zeta(ngf-igrid,2,1,1), zeta(ngf-igrid,3,1,1)
-     !enddo
+     ! do igrid = 1, 5
+     !    write(dbgunit,'(2x,3f20.8)') zeta(igrid,1,1,1), zeta(igrid,2,1,1), zeta(igrid,3,1,1)
+     ! enddo
+     ! write(dbgunit,'(" ... ")')
+     ! do igrid = 5, 0, -1
+     !    write(dbgunit,'(2x,3f20.8)') zeta(ngf-igrid,1,1,1), zeta(ngf-igrid,2,1,1), zeta(ngf-igrid,3,1,1)
+     ! enddo
      ! calculate zeta * C, which should in principle be a good approximation of Z
      allocate(Xmtrx(ngf,n_intp))
      allocate(tmp_Zmtrx(ngf,maxncv))
      allocate(tmp_Cmtrx(n_intp,maxncv))
-     if (.false.) then
+     if (.true.) then
      do isp = 1, nspin
         do ikp = 1, kpt%nk
            write(dbgunit, '(a,i2,a,i6)') " isp ", isp," ikp ", ikp
@@ -278,7 +291,7 @@ subroutine isdf(gvec, pol_in, kpt, n_intp, intp, nspin, ncv, maxncv, Cmtrx, Mmtr
                  do igrid = 1, ngf 
                     diff = diff + abs(Zmtrx(igrid,icv,isp,ikp)-tmp_Zmtrx(igrid,icv))
                     weight = weight + abs(Zmtrx(igrid,icv,isp,ikp))
-                    if ( (igrid < 160 .or. (igrid <600 .and. igrid > 500)) .and. &
+                    if ( .false. .and. (igrid < 160 .or. (igrid <600 .and. igrid > 500)) .and. &
                         mod(igrid,8) .eq. 1 ) &
                       write(dbgunit,'(i10,2x,3e15.5)') &
                         igrid, &
@@ -288,17 +301,16 @@ subroutine isdf(gvec, pol_in, kpt, n_intp, intp, nspin, ncv, maxncv, Cmtrx, Mmtr
                  enddo
                  diff = diff/weight
                  write(dbgunit, '(2i6,e15.5)') iv, ic, diff
-              enddo
-           enddo
-        enddo
-     enddo
+              enddo ! ic loop
+           enddo ! iv loop
+        enddo ! ikp loop
+     enddo ! isp loop
      endif
      deallocate(Xmtrx)
      deallocate(tmp_Zmtrx)
      deallocate(tmp_Cmtrx)
   endif ! if (outputdbg .and. peinf%master) 
 
-  deallocate(Zmtrx_distr)
   if (peinf%master) then
     deallocate(Zmtrx)
   endif
@@ -364,21 +376,14 @@ subroutine isdf(gvec, pol_in, kpt, n_intp, intp, nspin, ncv, maxncv, Cmtrx, Mmtr
            enddo ! ii
         enddo ! ikp
      enddo ! isp
-
+     deallocate(zeta) ! no longer needed
      close(dbgunit)
   endif ! if(peinf%master) 
-  allocate(tmpmtrx(n_intp, n_intp, nspin, kpt%nk))
-  tmpmtrx = 0
-  call MPI_ALLREDUCE(Mmtrx, tmpmtrx, n_intp*n_intp*nspin*kpt%nk, &
-     MPI_DOUBLE, MPI_SUM, peinf%comm, errinfo)
-  Mmtrx = tmpmtrx
-  deallocate(tmpmtrx)
-  allocate(tmpmtrx(n_intp, maxncv, nspin, kpt%nk))
-  tmpmtrx = 0
-  call MPI_ALLREDUCE(Cmtrx, tmpmtrx, n_intp*maxncv*nspin*kpt%nk, &
-     MPI_DOUBLE, MPI_SUM, peinf%comm, errinfo)
-  Cmtrx = tmpmtrx
-  deallocate(tmpmtrx)
+  
+  call MPI_BCAST(Mmtrx, n_intp*n_intp*nspin*kpt%nk, MPI_DOUBLE,&
+    peinf%masterid, MPI_COMM_WORLD, errinfo)
+  call MPI_BCAST(Cmtrx, n_intp*maxncv*nspin*kpt%nk, MPI_DOUBLE,&
+    peinf%masterid, MPI_COMM_WORLD, errinfo)
 
   return
 end subroutine isdf

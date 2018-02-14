@@ -373,5 +373,10 @@ module esdf_key
   data kw_typ(406)     / 'E:E' /
   data kw_dscrpt(406)  / '*! Do interpolative separable density fitting !*' /
 
+  ! Number of the interpolation points for ISDF method
+  data kw_label(407)   / 'num_isdf_points' /
+  data kw_typ(407)     / 'I:E' /
+  data kw_dscrpt(407)  / '*! The number of interpolation points for isdf !*' /
+
 end module esdf_key
 !===============================================================
