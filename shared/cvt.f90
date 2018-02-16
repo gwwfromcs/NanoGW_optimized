@@ -16,6 +16,7 @@ subroutine cvt(gvec, rho, nspin, n_intp, intp)
  ! convergence threshold 
  real(dp), parameter :: tol_conv = 1e-3
 
+ ! number of spin
  integer, intent(in) :: nspin
  ! gvec stores info about the real-space grids 
  type (gspace), intent(in) :: gvec 
@@ -26,17 +27,18 @@ subroutine cvt(gvec, rho, nspin, n_intp, intp)
  ! outputs, the index of intp pts in the full grid points
  integer, intent(out) :: intp(n_intp)
  ! the real-space coordinates (in a.u.) of intp pts
- real(dp) :: pts(3,n_intp), newpts(3,n_intp), oldpts(3,n_intp)
+ real(dp) :: newpts(3,n_intp), oldpts(3,n_intp)
  ! counters for different loops
  integer :: iter, ipt, ipt2, itran, igrid, ii, jj, kk, &
-   itmp1, itmp2, iduplicate
+   itmp1, itmp2, iduplicate, ig, flag, jpt, minig
  integer :: outdbg = 12345 ! unit of file for debugging
  ! full grid points and charge density on full grid points
  real(dp), allocatable :: fullgrid(:,:), fullrho(:)
  integer,allocatable :: icenter(:)
  real(dp) :: bounds(2,3), dist, weightedpos(3), weights, & 
-  diff, vtmp(3), dist_tmp
+  diff, vtmp(3), dist_tmp, mindist, minpts(3)
  integer :: pt_tmp(3)
+ integer :: select_grid(n_intp)
 
  open(outdbg, file="cvt_debug.dat", form='formatted', status='unknown')
  ! generate all points in the unfolded real space grid
@@ -66,28 +68,27 @@ subroutine cvt(gvec, rho, nspin, n_intp, intp)
  ! write(outdbg,*) bounds(1,1:3)
  ! write(outdbg,*) bounds(2,1:3)
 
- !rseed = time()
- rseed = 1518543090
+ rseed = time()
+ !rseed = 1518543090
  write(outdbg,'(a,i20)') "# rseed for random number generator is: ", rseed
  call srand(rseed)
  ! generate initial guess of interpolation points
- write(outdbg,'(a)') "# Initial guess of interpolation points "
+ ! write(outdbg,'(a)') "# Initial guess of interpolation points "
  do ipt = 1, n_intp
     do ii = 1,3
         ! generate some random points in the full grids
         ! multiply by 0.9 to make sure these random points are inside the
         ! boundary
-        pts(ii,ipt) = bounds(1,ii) + rand(0)*0.9*(bounds(2,ii)-bounds(1,ii)) 
+        newpts(ii,ipt) = bounds(1,ii) + rand(0)*0.9*(bounds(2,ii)-bounds(1,ii)) 
     enddo
     ! print out the intial random interpolation points
-    write(outdbg,'("# ",3f10.4)') pts(1:3,ipt)
+    ! write(outdbg,'("# ",3f10.4)') newpts(1:3,ipt)
  enddo
 
  ! perform centroidal voronoi tesselation (CVT) algorithm
  ! For more details, see arXiv: 1711.01531v1 by Kun Dong, Wei Hu and Lin Lin
  ! (2017)
- newpts = pts
- oldpts = pts
+ oldpts = newpts
  do iter = 1, max_iter
     ! for each point in the full grid, find which interpolation points is 
     ! the closest it. Then put the index of intp point to icenter(:)
@@ -108,77 +109,72 @@ subroutine cvt(gvec, rho, nspin, n_intp, intp)
 
     ! Now update the interpolation pts
     diff = 0.0
+    select_grid = 0
     do ipt = 1, n_intp
-       weightedpos(:) = 0.0
+       weightedpos(1:3) = 0.0
        weights = 0.0
        do igrid = 1, gvec%nr * gvec%syms%ntrans
-         if (icenter(igrid) .ne. ipt) cycle
-         weightedpos = weightedpos + fullgrid(:,igrid)*fullrho(igrid)
-         weights = weights + fullrho(igrid)
+          if (icenter(igrid) .ne. ipt) cycle
+          weightedpos = weightedpos + fullgrid(:,igrid)*fullrho(igrid)
+          weights = weights + fullrho(igrid)
        enddo
        ! update the new intp points with the centroid
        ! This is just a quick simple trick to avoid the case of weights == 0. It
        ! may be changed later with a better method.
        ! Simple minded fix, just generate a new randome points
-       if(weights .lt. 1e-7) then
-         do ii = 1,3
-             newpts(ii,ipt) = bounds(1,ii) + rand(0)*0.9*(bounds(2,ii)-bounds(1,ii)) 
-         enddo
+       if(weights .lt. 1.0e-10) then
+          newpts(:,ipt) = oldpts(:,ipt)
        else
-         newpts(:,ipt) = weightedpos/weights
+          newpts(:,ipt) = weightedpos(:) / weights
        endif
+       mindist = 1.e9 ! initialize a very large number
+       ! Loop over all the grid points to find a grid point that is closest to newpts(:,ipt)
+       do igrid = 1, gvec%nr
+          ! loop over all the grid points in full domain
+          flag = 0
+          ! check if this grid point has already exist in select_grid()
+          ! if it does, flag becomes 1
+          if(ipt .ge. 2) then
+             do jpt = 1,ipt-1
+                if(igrid .eq. select_grid(jpt)) then
+                   flag = 1
+                   exit
+                endif
+             enddo
+          endif
+          ! if this grid point already exist, then skip it
+          if (flag .eq. 1) cycle
+          ! if this grid point is not in select_grid(), then proceed
+          do itran = 1, gvec%syms%ntrans
+             ig = (igrid-1)*gvec%syms%ntrans + itran
+             vtmp = newpts(1:3,ipt) - fullgrid(1:3,ig)
+             dist = sqrt(dot_product(vtmp,vtmp)) 
+             if (dist < mindist) then
+                mindist = dist
+                minpts(1:3) = fullgrid(1:3,ig)
+                minig = igrid
+                intp(ipt) = ig
+             endif
+          enddo ! itran
+       enddo ! igrid
+       newpts(1:3,ipt) = minpts(1:3)
+       select_grid(ipt) = minig
        vtmp = newpts(:,ipt) - oldpts(:,ipt)
        diff = diff + sqrt(dot_product(vtmp,vtmp))
        !write(outdbg,'(8f8.3)') newpts(1:3,ipt), vtmp(1:3), &
        !  sqrt(dot_product(vtmp,vtmp)),weights
     enddo ! loop ipt
+    !write(*,*) select_grid(:)
+
     write(*,'(i8,a,f18.12)') iter, " diff (a.u.) ", diff/n_intp
     if (diff < tol_conv) then ! conv threshold is satisfied, break the loop??
-       write(*,*) " enter "
-       pts = newpts
-       iduplicate = -1
-       ! For each pts, find the closest full-grid points, and store
-       ! the index of the grid points to intp(:)
-       intp = 0
-       do ipt = 1, n_intp
-          ! initialize dist to a very large variabl
-          dist = 100.0 * ( maxval(bounds(2,:)) - minval(bounds(1,:)) )**2  
-          ! loop over all the points in full-grid to find out which one is
-          ! the closest to the current interpolation point
-          do igrid = 1,gvec%nr * gvec%syms%ntrans
-              vtmp = pts(:,ipt) - fullgrid(:,igrid)
-              dist_tmp = dot_product(vtmp, vtmp)
-              if (dist_tmp < dist) then
-                  dist = dist_tmp
-                  intp(ipt) = igrid
-              endif
-          enddo
-          ! Now find out if there are any duplicated points (symmetry related)
-          if(ipt .ge. 2) then
-            do ipt2 = 1, ipt-1
-               itmp1 = (intp(ipt2)-1)/gvec%syms%ntrans
-               itmp2 = (intp(ipt)-1)/gvec%syms%ntrans
-               ! If there are duplicated points, initialize it with a random point
-               ! and continue 
-               if(itmp2 .eq. itmp1) then
-                  iduplicate = ipt2
-                  do ii = 1,3 
-                     newpts(ii,ipt) = bounds(1,ii) + &
-                        rand(0)*0.9*(bounds(2,ii)-bounds(1,ii))
-                  enddo
-                  exit ! ipt2 loop
-               endif
-            enddo ! ipt2 loop
-          endif
-       enddo ! ipt loop
-       ! if there are no duplicated points, then we break the iteration
-       if(iduplicate < 0) exit 
+       exit 
     endif
     oldpts = newpts
  enddo ! iter
  
  do ipt = 1, n_intp
-    write(outdbg,'(9f8.3)') pts(1:3,ipt), fullgrid(1:3,intp(ipt)), &
+    write(outdbg,'(i10,i15,3f8.3," H ",3f8.3)') (intp(ipt)-1)/gvec%syms%ntrans,intp(ipt),fullgrid(1:3,intp(ipt)), &
     fullgrid(1:3,intp(ipt))*0.529177+ 4.1011
  enddo
 

@@ -7,7 +7,8 @@
 ! This file is part of RGWBS. It is distributed under the GPL v1.
 !
 !-------------------------------------------------------------------
-subroutine input_t(tamm_d,rpaonly,trip_flag,noxchange,trunc_c,doisdf,n_intp)
+subroutine input_t(tamm_d,rpaonly,trip_flag,noxchange,trunc_c,&
+        doisdf,n_intp,intp_type)
   !
   ! Read input parameters from file rgwbs.in
   !
@@ -28,7 +29,7 @@ subroutine input_t(tamm_d,rpaonly,trip_flag,noxchange,trunc_c,doisdf,n_intp)
   logical, intent(out) :: trunc_c
   logical, intent(out) :: doisdf
   integer, intent(out) :: n_intp
-
+  integer, intent(out) :: intp_type
   !-----------------------------------------------------------------------
   ! Start reading input parameters until the end of file is reached.
   !
@@ -45,6 +46,8 @@ subroutine input_t(tamm_d,rpaonly,trip_flag,noxchange,trunc_c,doisdf,n_intp)
   doisdf = (esdf_defined('doisdf'))
   
   n_intp = esdf_integer('num_isdf_points',-1)
+
+  intp_type = esdf_integer('intp_type',1)
 
   call esdf_close
 

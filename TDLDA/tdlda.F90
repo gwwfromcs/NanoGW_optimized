@@ -63,7 +63,8 @@ program tdlda
   ! ncv(1) correspond to spin up, and ncv(2) correspond to spin down.
   ! Assumption: for different kpts, the number of states with the same 
   !  spin are the same 
-  integer :: n_intp, maxc, maxv, iv, ic, ivv, icc, icv, maxncv, ncv(2), ihomo, ikp
+  integer :: n_intp, maxc, maxv, iv, ic, ivv, icc, icv, maxncv, ncv(2),&
+           ihomo, ikp, intp_type
   ! cvt.f90
   integer, allocatable :: intp(:), pairmap(:,:,:,:)
 
@@ -76,10 +77,11 @@ program tdlda
   !
   ! W Gao dbg 
   if(peinf%master) write (*,*) " Call input_g"
-  call input_g(pol_in,qpt,tdldacut,nbuff,lcache,w_grp%npes, &
+  call input_g(pol_in,qpt,tdldacut,nbuff,lcache,w_grp%npes,&
        nolda,tamm_d,r_grp%num, dft_code)
   if(peinf%master) write (*,*) " input_g done"
-  call input_t(tamm_d,rpaonly,trip_flag,noxchange,trunc_c,doisdf,n_intp)
+  call input_t(tamm_d,rpaonly,trip_flag,noxchange,trunc_c,&
+       doisdf,n_intp,intp_type)
   !-------------------------------------------------------------------
   ! Determine the set of wavefunctions to read: if n-th wavefunction is
   ! needed, then wmap(n) = .true.; otherwise, wmap(n) = .false.
@@ -158,12 +160,24 @@ program tdlda
      n_intp = int(2.0 * ihomo)
   endif
   allocate(intp(n_intp))
-  if (peinf%master) then
-     write(*,*) 'The master processor calls cvt to find interpolation points.'
-     call cvt(gvec, kpt%rho, nspin, n_intp, intp)
-     write(*,*) 'cvt subroutine is done.'
+  if(intp_type .eq. 1) then
+     if (peinf%master) then
+        write(*,*) " intp_type == 1"
+        call cvt(gvec, kpt%rho, nspin, n_intp, intp)
+     endif
+  elseif(intp_type .eq. 2) then
+     if (peinf%master) write(*,*) " intp_type == 2"
+     call cvt_wfn(gvec, kpt%wfn, nspin, kpt%nk, n_intp, intp)
+  else
+     write(*,*) 'Type',intp_type,'method for finding interpolation points is',&
+        ' not implememted so far. The default method will be used.'
   endif
-  !call MPI_bcast(intp(1),n_intp,MPI_INTEGER, peinf%masterid,peinf%comm,errinfo)
+  call MPI_BARRIER(peinf%comm,info)
+   
+  if(peinf%master) write(*,*) " Finding interpolation points successfully. "
+  ! For now, only peinf%master uses intp(:) in isdf.F90, so we don't need to
+  ! broadcast it
+  ! call MPI_bcast(intp(1),n_intp,MPI_INTEGER, peinf%masterid,peinf%comm,errinfo)
   if (peinf%master) write(*,*) 'call isdf subroutine'
   do isp = 1, nspin
      ncv(isp) = pol_in(isp)%nval * pol_in(isp)%ncond
@@ -194,11 +208,7 @@ program tdlda
         enddo
      enddo
   enddo
-  if(doisdf) then
-    call isdf(gvec, pol_in, kpt, n_intp, intp, nspin, ncv, maxncv, Cmtrx, Mmtrx, &
-    .TRUE.) 
-    if(peinf%master) write(*,*) 'done isdf'
-  endif
+
 
   !-------------------------------------------------------------------
   ! Calculate characters of representations.
@@ -229,6 +239,13 @@ program tdlda
   else
      call dsetup_g(gvec,kpt,qpt,pol_in,pol,k_p,nspin,tdldacut)
   call timacc(2,2,tsec)
+  endif
+
+
+  if(doisdf) then
+    call isdf(gvec, pol_in, kpt, n_intp, intp, nspin, ncv, maxncv, Cmtrx, Mmtrx, &
+    .TRUE.) 
+    if(peinf%master) write(*,*) 'done isdf'
   endif
 
   !-------------------------------------------------------------------
