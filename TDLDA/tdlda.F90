@@ -63,10 +63,15 @@ program tdlda
   ! ncv(1) correspond to spin up, and ncv(2) correspond to spin down.
   ! Assumption: for different kpts, the number of states with the same 
   !  spin are the same 
-  integer :: n_intp, maxc, maxv, iv, ic, ivv, icc, icv, maxncv, ncv(2),&
+  integer :: n_intp, maxc, maxv, iv, ic, ivv, icc, icv, maxncv,&
            ihomo, ikp, intp_type
   ! cvt.f90
-  integer, allocatable :: intp(:), pairmap(:,:,:,:)
+  integer, allocatable :: intp(:), pairmap(:,:,:,:), invpairmap(:,:,:,:), &
+           ncv(:)
+
+  ! WG debug
+  integer :: outdbg
+  character (len=20) :: dbg_filename
 
   !-------------------------------------------------------------------
   ! Initialization.
@@ -75,13 +80,18 @@ program tdlda
   !-------------------------------------------------------------------
   ! Read input info.
   !
-  ! W Gao dbg 
   if(peinf%master) write (*,*) " Call input_g"
   call input_g(pol_in,qpt,tdldacut,nbuff,lcache,w_grp%npes,&
-       nolda,tamm_d,r_grp%num, dft_code)
+       nolda,tamm_d,r_grp%num,dft_code,doisdf,n_intp,intp_type)
   if(peinf%master) write (*,*) " input_g done"
-  call input_t(tamm_d,rpaonly,trip_flag,noxchange,trunc_c,&
-       doisdf,n_intp,intp_type)
+  call input_t(tamm_d,rpaonly,trip_flag,noxchange,trunc_c)
+  
+  ! W Gao open dbg files
+  write(dbg_filename,"(i7)") peinf%inode
+  outdbg = peinf%inode+198812
+  dbg_filename = "kernel_dbg"//adjustl(dbg_filename)
+  open(outdbg,file=dbg_filename,status='unknown',iostat=info) 
+
   !-------------------------------------------------------------------
   ! Determine the set of wavefunctions to read: if n-th wavefunction is
   ! needed, then wmap(n) = .true.; otherwise, wmap(n) = .false.
@@ -142,73 +152,85 @@ program tdlda
      call die(lastwords)
   endif
 
-  ! W Gao calculate_zeta dbg
-  ihomo = 1
-  do isp = 1, nspin
-     do ikp = 1, kpt%nk
-        do ii = 1, kpt%wfn(isp,ikp)%nstate
-           if ( kpt%wfn(isp,ikp)%occ0(ii) > tol_occ .and. &
-                ihomo < ii) then
-              ihomo = ii
-           endif
-        enddo ! ii loop
-     enddo ! ikp loop
-  enddo ! isp loop
-  ! if n_intp can not be found in rgwbs.in or invalid (i.e., less than the
-  ! number of occupied states), then set it to a default value
-  if(n_intp .lt. ihomo) then 
-     n_intp = int(2.0 * ihomo)
-  endif
-  allocate(intp(n_intp))
-  if(intp_type .eq. 1) then
-     if (peinf%master) then
-        write(*,*) " intp_type == 1"
-        call cvt(gvec, kpt%rho, nspin, n_intp, intp)
+  if(doisdf) then
+     ! --- prepare some inputs for the ISDF method ---
+     ! W Gao find the index of highest occupied orbital
+     ihomo = 1
+     do isp = 1, nspin
+        do ikp = 1, kpt%nk
+           do ii = 1, kpt%wfn(isp,ikp)%nstate
+              if ( kpt%wfn(isp,ikp)%occ0(ii) > tol_occ .and. &
+                   ihomo < ii) then
+                 ihomo = ii
+              endif
+           enddo ! ii loop
+        enddo ! ikp loop
+     enddo ! isp loop
+     ! if n_intp can not be found in rgwbs.in or invalid (i.e., less than the
+     ! number of occupied states), then set it to a default value
+     if(n_intp .lt. ihomo) then 
+        n_intp = int(2.0 * ihomo)
      endif
-  elseif(intp_type .eq. 2) then
-     if (peinf%master) write(*,*) " intp_type == 2"
-     call cvt_wfn(gvec, kpt%wfn, nspin, kpt%nk, n_intp, intp)
-  else
-     write(*,*) 'Type',intp_type,'method for finding interpolation points is',&
-        ' not implememted so far. The default method will be used.'
-  endif
-  call MPI_BARRIER(peinf%comm,info)
+     allocate(intp(n_intp))
+     ! --- find interpolation points for ISDF method ---
+     if(intp_type .eq. 1) then
+        if (peinf%master) then
+           write(*,*) " intp_type == 1"
+           call cvt(gvec, kpt%rho, nspin, n_intp, intp)
+        endif
+     elseif(intp_type .eq. 2) then
+        if (peinf%master) write(*,*) " intp_type == 2"
+        call cvt_wfn(gvec, kpt%wfn, nspin, kpt%nk, n_intp, intp)
+     else
+        write(*,*) 'Type',intp_type,'method for finding interpolation points is',&
+           ' not implememted so far. The default method will be used.'
+     endif
+     call MPI_BARRIER(peinf%comm,info)
+      
+     if(peinf%master) write(*,*) " Finding interpolation points successfully. "
+     ! For now, only peinf%master uses intp(:) in isdf.F90, so we don't need to
+     ! broadcast it
+     ! call MPI_bcast(intp(1),n_intp,MPI_INTEGER, peinf%masterid,peinf%comm,errinfo)
    
-  if(peinf%master) write(*,*) " Finding interpolation points successfully. "
-  ! For now, only peinf%master uses intp(:) in isdf.F90, so we don't need to
-  ! broadcast it
-  ! call MPI_bcast(intp(1),n_intp,MPI_INTEGER, peinf%masterid,peinf%comm,errinfo)
-  if (peinf%master) write(*,*) 'call isdf subroutine'
-  do isp = 1, nspin
-     ncv(isp) = pol_in(isp)%nval * pol_in(isp)%ncond
-  enddo
-
-  maxncv = max(ncv(1), ncv(2))
-  maxv = 0 ! the absolute index of the highest occupied state
-  maxc = 0 ! the absolute index of the highest occupied state
-  do isp = 1, nspin
-     maxv = max( maxval(pol_in(isp)%vmap(:)), maxv)
-     maxc = max( maxval(pol_in(isp)%cmap(:)), maxc)
-  enddo
-  allocate(pairmap(maxv, maxc, nspin, kpt%nk))
-  allocate(Cmtrx(n_intp, maxncv, nspin, kpt%nk))
-  allocate(Mmtrx(n_intp, n_intp, nspin, kpt%nk))
-  pairmap = 0
-  do isp = 1, nspin
-     do ikp = 1, kpt%nk
-        icv = 0
-        do iv = 1, pol_in(isp)%nval
-           do ic = 1, pol_in(isp)%ncond
-               icv = icv + 1
-               ivv = pol_in(isp)%vmap(iv)
-               icc = pol_in(isp)%cmap(ic)
-               ! pairmap maps the real valence and conduction band index to 
-               pairmap(ivv,icc,isp,ikp) = icv 
+     ! ISDF will deal with all the pair products of wave functions as defined in
+     ! pol_in(isp)%vmap(:) and pol_in(isp)%cmap(:)
+     allocate(ncv(nspin))
+     do isp = 1, nspin
+        ncv(isp) = pol_in(isp)%nval * pol_in(isp)%ncond
+     enddo
+   
+     maxncv = max(ncv(1), ncv(2))
+     maxv = 0 ! the absolute index of the highest occupied state
+     maxc = 0 ! the absolute index of the highest occupied state
+     do isp = 1, nspin
+        maxv = max( maxval(pol_in(isp)%vmap(:)), maxv)
+        maxc = max( maxval(pol_in(isp)%cmap(:)), maxc)
+     enddo
+     allocate(pairmap(maxv, maxc, nspin, kpt%nk))
+     allocate(invpairmap(2, maxncv, nspin, kpt%nk))
+     allocate(Cmtrx(n_intp, maxncv, nspin, kpt%nk))
+     allocate(Mmtrx(n_intp, n_intp, nspin, kpt%nk))
+     pairmap = 0
+     invpairmap = 0
+     do isp = 1, nspin
+        do ikp = 1, kpt%nk
+           icv = 0
+           do iv = 1, pol_in(isp)%nval
+              do ic = 1, pol_in(isp)%ncond
+                  icv = icv + 1
+                  ivv = pol_in(isp)%vmap(iv)
+                  icc = pol_in(isp)%cmap(ic)
+                  ! pairmap maps the real valence and conduction band index to 
+                  ! the |vc> pair index obtained in isdf.f90 
+                  pairmap(ivv,icc,isp,ikp) = icv  
+                  ! invpairmap maps the 
+                  invpairmap(1,icv,isp,ikp) = ivv
+                  invpairmap(2,icv,isp,ikp) = icc
+              enddo
            enddo
         enddo
      enddo
-  enddo
-
+  endif ! if (doisdf)
 
   !-------------------------------------------------------------------
   ! Calculate characters of representations.
@@ -241,12 +263,16 @@ program tdlda
   call timacc(2,2,tsec)
   endif
 
-
+  ! --- perform ISDF method to interpolate pair products of wave functions ---
   if(doisdf) then
-    call isdf(gvec, pol_in, kpt, n_intp, intp, nspin, ncv, maxncv, Cmtrx, Mmtrx, &
+    if (peinf%master) write(*,*) 'call isdf subroutine'
+    call isdf(gvec, pol_in, kpt, n_intp, intp, nspin, ncv, maxncv, invpairmap, Cmtrx, Mmtrx, &
     .TRUE.) 
     if(peinf%master) write(*,*) 'done isdf'
   endif
+  ! The outputs are Cmtrx and Mmtrx, which are used by k_integrate_isdf() for
+  ! calculation of K(v,c,v',c') later !!
+  ! --- finished ISDF ---
 
   !-------------------------------------------------------------------
   ! Print out warnings, information etc.
@@ -329,9 +355,16 @@ program tdlda
           Cmtrx, Mmtrx, n_intp, maxc, maxv, maxncv, pairmap)
   endif
 
-  deallocate(pairmap)
-  deallocate(Cmtrx)
-  deallocate(Mmtrx)
+  close(outdbg)
+
+  ! Deallocate arrays for ISDF method
+  if(doisdf) then
+    deallocate(pairmap)
+    deallocate(invpairmap)
+    deallocate(Cmtrx)
+    deallocate(Mmtrx)
+    deallocate(ncv)
+  endif
 
   !-------------------------------------------------------------------
   ! Time accounting.

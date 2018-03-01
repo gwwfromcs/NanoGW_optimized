@@ -7,8 +7,7 @@
 ! This file is part of RGWBS. It is distributed under the GPL v1.
 !
 !-------------------------------------------------------------------
-subroutine input_t(tamm_d,rpaonly,trip_flag,noxchange,trunc_c,&
-        doisdf,n_intp,intp_type)
+subroutine input_t(tamm_d,rpaonly,trip_flag,noxchange,trunc_c)
   !
   ! Read input parameters from file rgwbs.in
   !
@@ -27,9 +26,6 @@ subroutine input_t(tamm_d,rpaonly,trip_flag,noxchange,trunc_c,&
   logical, intent(out) :: noxchange
   ! true if we want to truncate the Coulomb interaction (important if we calculate the macroscopic dielectric function of a periodic system)
   logical, intent(out) :: trunc_c
-  logical, intent(out) :: doisdf
-  integer, intent(out) :: n_intp
-  integer, intent(out) :: intp_type
   !-----------------------------------------------------------------------
   ! Start reading input parameters until the end of file is reached.
   !
@@ -42,12 +38,6 @@ subroutine input_t(tamm_d,rpaonly,trip_flag,noxchange,trunc_c,&
   noxchange =  (esdf_defined('no_exchange'))
 
   trunc_c =  (esdf_defined('truncate_coulomb'))
-
-  doisdf = (esdf_defined('doisdf'))
-  
-  n_intp = esdf_integer('num_isdf_points',-1)
-
-  intp_type = esdf_integer('intp_type',1)
 
   call esdf_close
 

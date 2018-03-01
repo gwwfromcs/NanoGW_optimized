@@ -30,8 +30,8 @@
 ! 2. the matrix Z and C are collected by the master node
 ! 3. the master node solve the linear equation to get zeta
 
-subroutine isdf(gvec, pol_in, kpt, n_intp, intp, nspin, ncv, maxncv, Cmtrx, Mmtrx, &
-     outputdbg)
+subroutine isdf(gvec, pol_in, kpt, n_intp, intp, nspin, ncv, maxncv, invpairmap, &
+      Cmtrx, Mmtrx, outputdbg)
  
   use typedefs
   use mpi_module
@@ -49,7 +49,7 @@ subroutine isdf(gvec, pol_in, kpt, n_intp, intp, nspin, ncv, maxncv, Cmtrx, Mmtr
   real(dp), intent(out) :: Cmtrx(n_intp, maxncv, nspin, kpt%nk)  ! Cmtrx on interpolation points
   real(dp), intent(out) :: Mmtrx(n_intp, n_intp, nspin, kpt%nk)
   logical, intent(in) :: outputdbg ! if TRUE, write debuggin information to isdf_dbg.dat
-
+  integer, intent(in) :: invpairmap(2, maxncv, nspin, kpt%nk)
 
   ! Zmtrx(gvec%ldn, Nc*Nv, nspin, kpt%nk) should be calculated by every processor in wfn_grp 
   ! Cmtrx(n_intp, Nc*Nv, nspin, kpt%nk)
@@ -66,11 +66,11 @@ subroutine isdf(gvec, pol_in, kpt, n_intp, intp, nspin, ncv, maxncv, Cmtrx, Mmtr
    ! matrices and vectors used for solving linear equations
    Amtrx(:,:), Bmtrx(:,:), Xmtrx(:,:), tmpmtrx(:,:,:,:), &
    rho_h(:)
-  real(dp) :: diff, weight, qkt(3)
+  real(dp) :: diff, weight, qkt(3), vcharac(gvec%syms%ntrans), ccharac(gvec%syms%ntrans)
   ! counters and temporary integers
   integer :: ipt, ii, jj, iv, ic, icv, & 
              IVV, ICC, JVV, JCC, itrans, isp, ikp, errinfo, igrid, &
-             iproc, tag
+             iproc, tag, virep, cirep
   integer :: status(MPI_STATUS_SIZE)
   ! The index of w_grp, r_grp, processor that works on the calculation of
   ! zeta(:,:,nspin,nk)
@@ -112,7 +112,7 @@ subroutine isdf(gvec, pol_in, kpt, n_intp, intp, nspin, ncv, maxncv, Cmtrx, Mmtr
     workrgrp = r_grp%mygr
     workwgrp = w_grp%mygr
     workproc = w_grp%inode ! the master proc should be zero?
-    write(*,'(a)') " Index of interpolation points: ", (intp(ii), ii=1,n_intp)
+    write(*,*) " Index of interpolation points: ", (intp(ii), ii=1,n_intp)
   endif
   call MPI_BCAST(workwgrp, 1, MPI_INTEGER, peinf%masterid, peinf%comm, errinfo)
   call MPI_BCAST(workrgrp, 1, MPI_INTEGER, peinf%masterid, peinf%comm, errinfo)
@@ -135,62 +135,63 @@ subroutine isdf(gvec, pol_in, kpt, n_intp, intp, nspin, ncv, maxncv, Cmtrx, Mmtr
 
   do isp = 1, nspin
      do ikp = 1, kpt%nk
-        icv = 0
         if (peinf%master) write(*,*) ' isp = ', isp, ', ikp = ', ikp
-        do iv = 1, pol_in(isp)%nval
-           do ic = 1, pol_in(isp)%ncond
-              !if (peinf%master) write(*,'(a,i5,a,i5)') "iv=", iv," ic=", ic
-              Zmtrx_loc = 0.d0
-              Zmtrx_distr = 0.d0
-              icv = icv+1
-              IVV = pol_in(isp)%vmap(iv)
-              JVV = kpt%wfn(isp,ikp)%map(IVV)
+        do icv = 1, ncv(isp)
+           IVV = invpairmap(1,icv,isp,ikp)
+           ICC = invpairmap(2,icv,isp,ikp)
+           if (peinf%master) write(*,'(a,i5,a,i5)') "ivv=", ivv," icc=", icc
+           Zmtrx_loc = 0.d0
+           Zmtrx_distr = 0.d0
+           JVV = kpt%wfn(isp,ikp)%map(IVV)
 
-              ! copy phi_v to Zmtrx_loc
-              call dcopy(w_grp%mydim, &
-                kpt%wfn(isp,ikp)%dwf(1,JVV),1,Zmtrx_distr(1),1)
-              ICC = pol_in(isp)%cmap(ic)
-              JCC = kpt%wfn(isp,ikp)%map(ICC)
-              ! calculate phi_v(r)*phi_c(r) and store it in Zmtrx_loc
-              call dmultiply_vec(w_grp%mydim, &
-                kpt%wfn(isp,ikp)%dwf(1,JCC),Zmtrx_distr(1)) 
+           ! copy phi_v to Zmtrx_loc
+           call dcopy(w_grp%mydim, &
+             kpt%wfn(isp,ikp)%dwf(1,JVV),1,Zmtrx_distr(1),1)
+           JCC = kpt%wfn(isp,ikp)%map(ICC)
+           ! calculate phi_v(r)*phi_c(r) and store it in Zmtrx_loc
+           call dmultiply_vec(w_grp%mydim, &
+             kpt%wfn(isp,ikp)%dwf(1,JCC),Zmtrx_distr(1)) 
 
-              if (w_grp%mygr .eq. workwgrp .and. r_grp%mygr .eq. workrgrp) then
-                 ! peinf%master collect Zmtrx from other processors in w_grp
-                 do iproc = 0, w_grp%npes-1
-                    !write(*,*) "w_grp%inode ", w_grp%inode, " loop iproc = ", iproc
-                    tag = iproc
-                    if (workproc .eq. iproc) then
-                      if (w_grp%inode .eq. iproc) &
-                        call dcopy(ncount(iproc), Zmtrx_distr(1),1,&
-                          Zmtrx_loc(offset(iproc)),1)
-                    else
-                      if (w_grp%inode .eq. iproc) &
-                        call MPI_send( Zmtrx_distr(1), ncount(iproc), &
-                          MPI_DOUBLE, workproc, tag, w_grp%comm, errinfo)
-                      if (w_grp%inode .eq. workproc) &
-                        call MPI_recv( Zmtrx_loc(offset(iproc)), ncount(iproc), &
-                          MPI_DOUBLE, iproc, tag, w_grp%comm, status, errinfo)
-                    endif
-                 enddo
-              endif
+           if (w_grp%mygr .eq. workwgrp .and. r_grp%mygr .eq. workrgrp) then
+              ! peinf%master collect Zmtrx from other processors in w_grp
+              do iproc = 0, w_grp%npes-1
+                 !write(*,*) "w_grp%inode ", w_grp%inode, " loop iproc = ", iproc
+                 tag = iproc
+                 if (workproc .eq. iproc) then
+                   if (w_grp%inode .eq. iproc) &
+                     call dcopy(ncount(iproc), Zmtrx_distr(1),1,&
+                       Zmtrx_loc(offset(iproc)),1)
+                 else
+                   if (w_grp%inode .eq. iproc) &
+                     call MPI_send( Zmtrx_distr(1), ncount(iproc), &
+                       MPI_DOUBLE, workproc, tag, w_grp%comm, errinfo)
+                   if (w_grp%inode .eq. workproc) &
+                     call MPI_recv( Zmtrx_loc(offset(iproc)), ncount(iproc), &
+                       MPI_DOUBLE, iproc, tag, w_grp%comm, status, errinfo)
+                 endif
+              enddo
+           endif
 
-              if(peinf%master) then
-                 igrid = 0
-                 do ipt = 1, gvec%nr
-                    ! peinf%master generate the Cmtrx
-                    do itrans = 1, gvec%syms%ntrans
-                      igrid = igrid + 1
-                      Zmtrx(igrid, icv, isp, ikp) = Zmtrx_loc(ipt)
-                    enddo ! itrans
-                 enddo ! ipt
-                 
-                 do ipt = 1, n_intp ! intp maps 
-                    Cmtrx(ipt, icv, isp, ikp) = Zmtrx(intp(ipt), icv, isp, ikp)
-                 enddo
-              endif
-           enddo ! ic loop
-        enddo ! iv loop
+           virep = kpt%wfn(isp,ikp)%irep(JVV)
+           cirep = kpt%wfn(isp,ikp)%irep(JCC)
+           vcharac = gvec%syms%chi(virep,:)
+           ccharac = gvec%syms%chi(cirep,:)
+           if(peinf%master) then
+              igrid = 0
+              do ipt = 1, gvec%nr
+                 ! peinf%master generate the Cmtrx
+                 do itrans = 1, gvec%syms%ntrans
+                   igrid = igrid + 1
+                   Zmtrx(igrid, icv, isp, ikp) = Zmtrx_loc(ipt) * &
+                     vcharac(itrans) * ccharac(itrans)
+                 enddo ! itrans
+              enddo ! ipt
+              
+              do ipt = 1, n_intp ! intp maps 
+                 Cmtrx(ipt, icv, isp, ikp) = Zmtrx(intp(ipt), icv, isp, ikp)
+              enddo
+           endif
+        enddo ! icv loop
         
         ! For each spin and ikp, calculate zeta
         ! zeta = Z * C^T * ( C * C^T)^-1  dimension: Ng*Nu
@@ -281,28 +282,26 @@ subroutine isdf(gvec, pol_in, kpt, n_intp, intp, nspin, ncv, maxncv, Cmtrx, Mmtr
            ! Xmtrx(ngf,n_intp) * tmp_Cmtrx(n_intp,maxncv)
            call dgemm('n','n', ngf, maxncv, n_intp, one, &
              Xmtrx, ngf, tmp_Cmtrx, n_intp, zero, tmp_Zmtrx, ngf)  
-           icv = 0
-           write(dbgunit,'(a)') "   iv    ic      diff "
-           do iv = 1, pol_in(isp)%nval
-              do ic = 1, pol_in(isp)%ncond
-                 icv = icv + 1
-                 diff = 0
-                 weight = 0
-                 do igrid = 1, ngf 
-                    diff = diff + abs(Zmtrx(igrid,icv,isp,ikp)-tmp_Zmtrx(igrid,icv))
-                    weight = weight + abs(Zmtrx(igrid,icv,isp,ikp))
-                    if ( .false. .and. (igrid < 160 .or. (igrid <600 .and. igrid > 500)) .and. &
-                        mod(igrid,8) .eq. 1 ) &
-                      write(dbgunit,'(i10,2x,3e15.5)') &
-                        igrid, &
-                        Zmtrx(igrid,icv,isp,ikp), &
-                        tmp_Zmtrx(igrid,icv), &
-                        Zmtrx(igrid,icv,isp,ikp)-tmp_Zmtrx(igrid,icv)
-                 enddo
-                 diff = diff/weight
-                 write(dbgunit, '(2i6,e15.5)') iv, ic, diff
-              enddo ! ic loop
-           enddo ! iv loop
+           write(dbgunit,'(a)') "   ivv    icc      diff "
+           do icv = 1, ncv(isp)
+              diff = 0
+              weight = 0
+              ivv = invpairmap(1,icv,isp,ikp)
+              icc = invpairmap(2,icv,isp,ikp)
+              do igrid = 1, ngf 
+                 diff = diff + abs(Zmtrx(igrid,icv,isp,ikp)-tmp_Zmtrx(igrid,icv))
+                 weight = weight + abs(Zmtrx(igrid,icv,isp,ikp))
+                 !if ( (igrid < 160 .or. (igrid <9500 .and. igrid > 9000)) .and. &
+                 !    mod(igrid,8) .eq. 1 ) & 
+                 !  write(dbgunit,'(i10,2x,3e15.5)') &
+                 !    igrid, &
+                 !    Zmtrx(igrid,icv,isp,ikp), &
+                 !    tmp_Zmtrx(igrid,icv), &
+                 !    Zmtrx(igrid,icv,isp,ikp)-tmp_Zmtrx(igrid,icv)  ! For Debug
+              enddo
+              diff = diff/weight
+              write(dbgunit, '(2i6,e15.5)') ivv, icc, diff
+           enddo ! icv loop
         enddo ! ikp loop
      enddo ! isp loop
      endif

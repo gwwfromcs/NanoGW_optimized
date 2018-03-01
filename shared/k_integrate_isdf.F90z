@@ -210,12 +210,25 @@ subroutine Zk_integrate_isdf(gvec,kpt,k_mat,k_tmp,irp,kflag,nspin,nbuff_max,qkt_
               
               ! m1, m2, m3, m4 are the real band index in parsec.dat
               ! pairmap maps the val and cond index to pair index in Cmtrx
+              ! assume m1 < m2 and m3 < m4
+              if(m1 > m2 .or. m3 > m4) then
+                 write(*,*) 'm1 > m2 or m3 > m4'
+                 write(*,*) 'm1 m2 m3 m4 :', m1, m2, m3, m4
+                 stop
+              endif
               icv1 = pairmap(m1,m2,rsp,k1) ! assume k1 == k2, this is valid for confined systems
               icv2 = pairmap(m3,m4,csp,k3) ! assume k3 == k4
+              if(icv1 ==0 .or. icv2 ==0 .or. icv1 > maxncv .or. icv2 > maxncv) then
+                  write(*,*) "inode", peinf%inode, "m1 m2 rsp k1", m1, m2, rsp, k1
+                  write(*,*) "inode", peinf%inode, "m3 m4 csp k3", m3, m4, csp, k3
+                  stop
+              endif
               ! Mmtrx dimension: Mmtrx(n_intp, n_intp)
               ! Cmtrx dimension: Cmtrx(n_intp, maxncv)
               ! calculate: tmpvec(1:n_intp) = Mmtrx(1:n_intp, 1:n_intp) * Cmtrx(1:n_intp, icv1)
-              write(outdbg, '(A,i5,A,i5)') " icv1 = ", icv1, " icv2 = ", icv2
+              write(outdbg, '(A,i5,A,i5,A,i5,A,i5)') &
+                "rsp =", rsp, " csp =", &
+                csp, " icv1 = ", icv1, " icv2 = ", icv2
               call dgemv('n',n_intp,n_intp,one,Mmtrx,n_intp,Cmtrx(1,icv1,rsp,k1),1,& 
                 zero,tmpvec,1)
 

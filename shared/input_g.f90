@@ -11,10 +11,11 @@
 !
 !-------------------------------------------------------------------
 subroutine input_g(pol_in,qpt,tdldacut,nbuff,lcache,wgr_npes, &
-      nolda,tamm_d,rgr_num,dft_code)
+      nolda,tamm_d,rgr_num,dft_code,doisdf,n_intp,intp_type)
 
   use typedefs
   use esdf
+  use mpi_module
   implicit none
 
   ! arguments
@@ -40,6 +41,11 @@ subroutine input_g(pol_in,qpt,tdldacut,nbuff,lcache,wgr_npes, &
   integer :: ii, jj, nlines
   real(dp) :: sbuff, dtmp
   integer, dimension(maxdata,2) :: vmap, cmap
+
+  ! variables for ISDF method
+  logical, intent(out) :: doisdf
+  integer, intent(out) :: n_intp
+  integer, intent(out) :: intp_type
 
   !-----------------------------------------------------------------------
   ! Initialize input info.
@@ -68,6 +74,14 @@ subroutine input_g(pol_in,qpt,tdldacut,nbuff,lcache,wgr_npes, &
   nolda = esdf_defined('no_lda_kernel')
 
   tamm_d = esdf_defined('tamm_dancoff')
+
+  ! read variables for ISDF method
+  doisdf = (esdf_defined('doisdf'))
+  
+  n_intp = esdf_integer('num_isdf_points',-1)
+
+  intp_type = esdf_integer('intp_type',1)
+  ! ------
 
   ii = 1
   rgr_num = esdf_integer('distribute_representations',ii)
@@ -162,22 +176,26 @@ subroutine input_g(pol_in,qpt,tdldacut,nbuff,lcache,wgr_npes, &
   enddo
   
   ! W Gao dbg 
-  do ii = 1, 2
-     if (pol_in(ii)%nval /= 0) then
-        write(*,'("pol_in(",i2,")%nval = ",i8)') ii,pol_in(ii)%nval
-        write(*,'("     j      vmap(j) ")')
-        do jj = 1, pol_in(ii)%nval
-           write(*,'(i8,i8)') jj, pol_in(ii)%vmap(jj)
-        enddo
-     endif
-     if (pol_in(ii)%ncond /= 0) then
-        write(*,'("pol_in(",i2,")%ncond = ",i8)') ii,pol_in(ii)%ncond
-        write(*,'("     i      cmap(i) ")')
-        do jj = 1, pol_in(ii)%ncond
-           write(*,'(i8,i8)') jj, pol_in(ii)%cmap(jj)
-        enddo
-     endif
-  enddo
+  if(peinf%master) then
+     do ii = 1, 2
+        if (pol_in(ii)%nval /= 0) then
+           write(*,'("pol_in(",i2,")%nval = ",i8)') ii,pol_in(ii)%nval
+           write(*,'("     j      vmap(j) ")')
+           do jj = 1, pol_in(ii)%nval
+              write(*,'(i8,i8)') jj, pol_in(ii)%vmap(jj)
+           enddo
+        endif
+        write(*,'()')
+        if (pol_in(ii)%ncond /= 0) then
+           write(*,'("pol_in(",i2,")%ncond = ",i8)') ii,pol_in(ii)%ncond
+           write(*,'("     i      cmap(i) ")')
+           do jj = 1, pol_in(ii)%ncond
+              write(*,'(i8,i8)') jj, pol_in(ii)%cmap(jj)
+           enddo
+        endif
+        write(*,'()')
+     enddo
+  endif
         
 end subroutine input_g
 !===================================================================

@@ -114,19 +114,19 @@ subroutine Zeigensolver(verbose,inode,npes,comm,nblock,nmat,shs,egv,ierr)
   integer :: ip
 
   ! -- print out the matrix need to be diagonalized --
-  do ip = 0, npes
-    if(inode .eq. ip) then
-      write(*,'(a,i5)') "inode =", ip
-      do ii = 1, nmat
-        write(*,'(i5)', advance='no') ii
-        do jj = 1, nblock
-          write(*,'(f10.5)', advance='no')  shs(ii,jj)
-        enddo
-        write(*,'()')
-      enddo
-    endif
-    call MPI_BARRIER(comm,info)
-  enddo
+  !do ip = 0, npes
+  !  if(inode .eq. ip) then
+  !    write(*,'(a,i5)') "inode =", ip
+  !    do ii = 1, nmat
+  !      write(*,'(i5)', advance='no') ii
+  !      do jj = 1, nblock
+  !        write(*,'(f10.5)', advance='no')  shs(ii,jj)
+  !      enddo
+  !      write(*,'()')
+  !    enddo
+  !  endif
+  !  call MPI_BARRIER(comm,info)
+  !enddo
 
   !-------------------------------------------------------------------
   !  If running with single PE, use the serial subroutines. Otherwise,

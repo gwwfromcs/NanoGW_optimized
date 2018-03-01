@@ -59,7 +59,7 @@ subroutine parsec_wfn(gvec,kpt,nmap,nspin,wmap,init_gr)
   complex(dpc), allocatable :: zcg(:), zwfn(:)
 
   ! W Gao debug
-  integer :: outdbg = 198812
+  integer :: outdbg = 188812
   if(peinf%master) then
       open(outdbg, file="parsec_info.dat", form='formatted', status='replace')
   endif
