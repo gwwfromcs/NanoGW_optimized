@@ -383,5 +383,10 @@ module esdf_key
   data kw_typ(408)     / 'I:E' /
   data kw_dscrpt(408)  / '*! 1 cvt method using charge density as weight; 2 cvt method using the modular square of all wavefunctions as weight  *!' /
 
+  ! Method for finding the interpolation points for ISDF method
+  data kw_label(409)   / 'parallelisdf'/
+  data kw_typ(409)     / 'E:E' /
+  data kw_dscrpt(409)  / '*! Use parallel version of isdf method  *!' /
+
 end module esdf_key
 !===============================================================

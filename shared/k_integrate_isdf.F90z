@@ -39,10 +39,11 @@ subroutine Zk_integrate_isdf(gvec,kpt,k_mat,k_tmp,irp,kflag,nspin,nbuff_max,qkt_
   ! C matrix 
   real(dp), intent(in) :: Cmtrx(n_intp, maxncv, nspin, kpt%nk)
   ! Mmtrix 
-  real(dp), intent(in) :: Mmtrx(n_intp, n_intp, nspin, kpt%nk)
+  real(dp), intent(in) :: Mmtrx(n_intp, n_intp, nspin, nspin, kpt%nk, 2)
 
 
   ! local variables
+  real(dp) :: tmpMmtrx(n_intp, n_intp)
   type(xc_type) :: xc_lda
   real(dp), parameter :: tol_l = 1.d-8
   character (len=800) :: lastwords
@@ -207,10 +208,11 @@ subroutine Zk_integrate_isdf(gvec,kpt,k_mat,k_tmp,irp,kflag,nspin,nbuff_max,qkt_
               k3 = ipe_quadr(7,dicount)
               k4 = ipe_quadr(8,dicount)
               write(outdbg, '(A,I5,A,4I5)') " ----- dicount", dicount, ", m1 m2 m3 m4", m1,m2,m3,m4
-              
+              !
               ! m1, m2, m3, m4 are the real band index in parsec.dat
               ! pairmap maps the val and cond index to pair index in Cmtrx
               ! assume m1 < m2 and m3 < m4
+              !
               if(m1 > m2 .or. m3 > m4) then
                  write(*,*) 'm1 > m2 or m3 > m4'
                  write(*,*) 'm1 m2 m3 m4 :', m1, m2, m3, m4
@@ -223,21 +225,34 @@ subroutine Zk_integrate_isdf(gvec,kpt,k_mat,k_tmp,irp,kflag,nspin,nbuff_max,qkt_
                   write(*,*) "inode", peinf%inode, "m3 m4 csp k3", m3, m4, csp, k3
                   stop
               endif
-              ! Mmtrx dimension: Mmtrx(n_intp, n_intp)
-              ! Cmtrx dimension: Cmtrx(n_intp, maxncv)
+              !
+              ! Mmtrx dimension: Mmtrx(n_intp, n_intp, nspin, nspin, 2)
+              ! Mmtrx(:,:,:,:,:, 1): <zeta(i,isp)| V_coul | zeta(j,jsp)>
+              ! Mmtrx(:,:,:,:,:, 2): <zeta(i,isp)| f_lda | zeta(j,isp)>
+              ! Cmtrx dimension: Cmtrx(n_intp, maxncv, nspin)
               ! calculate: tmpvec(1:n_intp) = Mmtrx(1:n_intp, 1:n_intp) * Cmtrx(1:n_intp, icv1)
+              !
               write(outdbg, '(A,i5,A,i5,A,i5,A,i5)') &
                 "rsp =", rsp, " csp =", &
                 csp, " icv1 = ", icv1, " icv2 = ", icv2
-              call dgemv('n',n_intp,n_intp,one,Mmtrx,n_intp,Cmtrx(1,icv1,rsp,k1),1,& 
-                zero,tmpvec,1)
-
+              tmpMmtrx(1:n_intp, 1:n_intp) = 0.0
+              if ( kflag < 2 ) then
+                 tmpMmtrx = tmpMmtrx + Mmtrx(1:n_intp, 1:n_intp, csp, rsp, k1, 1)
+              endif
+              if ( kflag > 0 ) then
+                 tmpMmtrx = tmpMmtrx + Mmtrx(1:n_intp, 1:n_intp, csp, rsp, k1, 2)
+              endif
+              ! currently only support confined systems, so there is only one kpt
+              call dgemv('n', n_intp, n_intp, one, tmpMmtrx(1, 1), n_intp, &
+                Cmtrx(1, icv1, rsp, k1), 1, zero, tmpvec, 1) 
+              !
               !my_matrix(dicount) = my_matrix(dicount) + &
               !     Zdot_c(nelem,fwfn123,1,kpt%wfn(csp,k4)%Zwf(istart,jj),1) * fac
               ! calculate: Zm_f = tmpvec(1:n_intp) * Cmtrx(1:n_intp, icv2)
+              !
               k_tmp(iblock)%Zm_f(jcount+dicount) =  & 
                 Zdot_c(n_intp,tmpvec,1,Cmtrx(1,icv2,csp,k3),1)
-
+              !
            enddo ! do dicount loop
 
            do dicount = 1, ipe_count
@@ -252,14 +267,14 @@ subroutine Zk_integrate_isdf(gvec,kpt,k_mat,k_tmp,irp,kflag,nspin,nbuff_max,qkt_
            call timacc(13,2,tsec)
            jcount = jcount + mycount
            write(outdbg,'(A,I6)') " -- jcount = ", jcount
-  !
-  ! Are we close to filling up buffer arrays? If so, print out
-  ! calculated matrix elements.
-  !
-  ! jcount is a counter for the number of computed matrix elements before
-  ! last output on disk by the current PE
-  ! ncount is a cumulative counter of computed matrix elements
-  !
+           !  
+           !   Are we close to filling up buffer arrays? If so, print out
+           !   calculated matrix elements.
+           !  
+           !   jcount is a counter for the number of computed matrix elements before
+           !   last output on disk by the current PE
+           !   ncount is a cumulative counter of computed matrix elements
+           !  
            if (jcount+k_mat%ncol >= k_tmp(iblock)%nblock_max) then
               k_tmp(iblock)%nblock = jcount
               ncount = ncount + jcount

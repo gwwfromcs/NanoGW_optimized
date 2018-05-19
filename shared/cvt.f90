@@ -1,10 +1,14 @@
-! Issue need to be resolved: How do you make sure there are no duplicated
-! interpolation points??
+! 
+! INPUT:   charge density rho(:,nspin) for two different spins
+! OUTPUT:  index of interpolation points at full grids
+!
+! Issue need to be resolved: 
+! - How do you make sure there are no duplicated interpolation points??
 
 subroutine cvt(gvec, rho, nspin, n_intp, intp)
 
  use typedefs
- USE IFPORT   ! This is required for rand() if intel compiler is used
+ USE IFPORT   ! This is required to call subroutine rand() if intel compiler is used
  implicit none
 
  ! -- PARAMETERS --
@@ -68,8 +72,8 @@ subroutine cvt(gvec, rho, nspin, n_intp, intp)
  ! write(outdbg,*) bounds(1,1:3)
  ! write(outdbg,*) bounds(2,1:3)
 
- rseed = time()
- !rseed = 1518543090
+ !rseed = time()
+ rseed = 1518543090
  write(outdbg,'(a,i20)') "# rseed for random number generator is: ", rseed
  call srand(rseed)
  ! generate initial guess of interpolation points

@@ -12,7 +12,7 @@ subroutine Zcalculate_sigma(nspin,nkpt,n_it,it_scf,nr_buff,sig_en, &
      dft_code,chkpt_in,gvec,kpt,qpt,k_c,k_p,pol,sig_in, &
      sig,q_p,nolda,tamm_d,writeqp,snorm,cohsex,hqp_sym,lstop, &
      ecuts,qpmix,sig_cut,max_sig,&
-     Cmtrx, Mmtrx, n_intp, maxc, maxv, maxncv, pairmap)
+     Cmtrx, Mmtrx, n_intp, maxj, maxi, maxnij, pairmap)
 
   use typedefs
   use mpi_module
@@ -65,11 +65,11 @@ subroutine Zcalculate_sigma(nspin,nkpt,n_it,it_scf,nr_buff,sig_en, &
   ! maximum amplitude of self-energy correction
   real(dp), intent(out) :: max_sig
   ! Additional input parameters for ISDF method
-  integer, intent(in) :: n_intp, maxc, maxv, maxncv, pairmap(maxv,maxc,nspin,kpt%nk)
+  integer, intent(in) :: n_intp, maxj, maxi, maxnij, pairmap(maxi,maxj,nspin,kpt%nk)
   ! C matrix 
-  real(dp), intent(in) :: Cmtrx(n_intp, maxncv, nspin, kpt%nk)
+  real(dp), intent(in) :: Cmtrx(n_intp, maxnij, nspin, kpt%nk)
   ! Mmtrix 
-  real(dp), intent(in) :: Mmtrx(n_intp, n_intp, nspin, kpt%nk)
+  real(dp), intent(in) :: Mmtrx(n_intp, n_intp, nspin, nspin, kpt%nk, 2)
 
   ! local variables
   character (len=100) :: file_name
@@ -98,7 +98,7 @@ subroutine Zcalculate_sigma(nspin,nkpt,n_it,it_scf,nr_buff,sig_en, &
      chkpt = chkpt_in
      call Zcalculate_tdlda(gvec,kpt,qpt,k_p,pol,nspin,chkpt, &
           tamm_d,nolda,.false.,.false.,.false.,.false.,xsum,epsinv, &
-          Cmtrx, Mmtrx, n_intp, maxc, maxv, maxncv, pairmap)
+          Cmtrx, Mmtrx, n_intp, maxj, maxi, maxnij, pairmap)
      !
      ! Rescale sum rule.
      if (.not. snorm) xsum = one
@@ -255,7 +255,7 @@ subroutine Zcalculate_sigma(nspin,nkpt,n_it,it_scf,nr_buff,sig_en, &
            call Zgw_correlation(gvec,kpt,qpt,k_c(irp,iq),pol(irp,iq), &
                 sig_in,sig,nspin,nkpt,irp, &
                 pol_unit,k_p(irp,iq)%nn,qpt%nk,iq,sig_en,nolda,xsum, &
-                Cmtrx, Mmtrx, n_intp, maxc, maxv, maxncv, pairmap)
+                Cmtrx, Mmtrx, n_intp, maxj, maxi, maxnij, pairmap)
         enddo
 #ifdef MPI
         !-------------------------------------------------------------------

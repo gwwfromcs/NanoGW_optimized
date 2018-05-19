@@ -16,7 +16,7 @@ SRC	= alccheck.f90 define_kmap.f90 define_xc.f90 \
 	  select1234.f90 spline.f90 \
 	  spline_evaluate.f90 splint.f90 stopwatch.f90 sum_rule.f90 \
 	  timacc.f90 unfold.f90 vector_check.f90 \
-	  write_sigma.f90 cvt.f90 $(AUX_SRC)
+	  write_sigma.f90 cvt.f90 linear_solver.f90 printmatrix.f90  $(AUX_SRC)
 PSRCZ	= calculate_tdlda.F90z calculate_sigma.F90z charac_group.F90z \
 	  contract_en.F90z correlation.F90z \
 	  define_pmap.F90z diag_pol.F90z dipole.F90z eigensolver.F90z energy_mtxel.F90z \
@@ -30,7 +30,7 @@ PSRCZ	= calculate_tdlda.F90z calculate_sigma.F90z charac_group.F90z \
 	  k_integrate_isdf.F90z
 PSRC	= die.F90 grid_setup.F90 finalize.F90 input_s.F90 paratec_wfn.F90 \
 	  parsec_wfn.F90 printsigma.F90 qp_eigensolver.F90 \
-	  save_sigma.F90 sigma.F90 isdf.F90 cvt_wfn.F90
+	  save_sigma.F90 sigma.F90 isdf_parallel.F90 cvt_wfn.F90
 
 OBJ	= $(SRC:.f90=.o)
 POBJ	= $(PSRC:.F90=.o)

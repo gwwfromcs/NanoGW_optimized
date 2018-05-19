@@ -56,15 +56,15 @@ program tdlda
 #endif
 
   ! W Gao dbg
-  logical :: doisdf
+  logical :: doisdf, paraisdf
   real(dp), allocatable :: zeta(:,:,:,:)
-  real(dp), allocatable :: Cmtrx(:,:,:,:), Mmtrx(:,:,:,:)
+  real(dp), allocatable :: Cmtrx(:,:,:,:), Mmtrx(:,:,:,:,:,:)
   ! the number of val and cond states pairs. Since there could be two spins,
   ! ncv(1) correspond to spin up, and ncv(2) correspond to spin down.
   ! Assumption: for different kpts, the number of states with the same 
   !  spin are the same 
   integer :: n_intp, maxc, maxv, iv, ic, ivv, icc, icv, maxncv,&
-           ihomo, ikp, intp_type
+           ihomo, ikp, intp_type, kflag
   ! cvt.f90
   integer, allocatable :: intp(:), pairmap(:,:,:,:), invpairmap(:,:,:,:), &
            ncv(:)
@@ -82,7 +82,7 @@ program tdlda
   !
   if(peinf%master) write (*,*) " Call input_g"
   call input_g(pol_in,qpt,tdldacut,nbuff,lcache,w_grp%npes,&
-       nolda,tamm_d,r_grp%num,dft_code,doisdf,n_intp,intp_type)
+       nolda,tamm_d,r_grp%num,dft_code,doisdf,paraisdf,n_intp,intp_type)
   if(peinf%master) write (*,*) " input_g done"
   call input_t(tamm_d,rpaonly,trip_flag,noxchange,trunc_c)
   
@@ -188,9 +188,8 @@ program tdlda
      call MPI_BARRIER(peinf%comm,info)
       
      if(peinf%master) write(*,*) " Finding interpolation points successfully. "
-     ! For now, only peinf%master uses intp(:) in isdf.F90, so we don't need to
-     ! broadcast it
-     ! call MPI_bcast(intp(1),n_intp,MPI_INTEGER, peinf%masterid,peinf%comm,errinfo)
+     ! broadcast intp to all processors 
+     call MPI_bcast(intp(1),n_intp,MPI_INTEGER, peinf%masterid,peinf%comm,info)
    
      ! ISDF will deal with all the pair products of wave functions as defined in
      ! pol_in(isp)%vmap(:) and pol_in(isp)%cmap(:)
@@ -208,8 +207,7 @@ program tdlda
      enddo
      allocate(pairmap(maxv, maxc, nspin, kpt%nk))
      allocate(invpairmap(2, maxncv, nspin, kpt%nk))
-     allocate(Cmtrx(n_intp, maxncv, nspin, kpt%nk))
-     allocate(Mmtrx(n_intp, n_intp, nspin, kpt%nk))
+
      pairmap = 0
      invpairmap = 0
      do isp = 1, nspin
@@ -265,10 +263,16 @@ program tdlda
 
   ! --- perform ISDF method to interpolate pair products of wave functions ---
   if(doisdf) then
-    if (peinf%master) write(*,*) 'call isdf subroutine'
-    call isdf(gvec, pol_in, kpt, n_intp, intp, nspin, ncv, maxncv, invpairmap, Cmtrx, Mmtrx, &
-    .TRUE.) 
-    if(peinf%master) write(*,*) 'done isdf'
+     if (peinf%master) write(*,*) 'call isdf subroutine'
+     kflag = 1 
+     if ( trip_flag ) kflag = 3 
+     if ( noxchange ) kflag = 2
+     if ( nolda )     kflag = 0
+     allocate(Cmtrx(n_intp, maxncv, nspin, kpt%nk))
+     allocate(Mmtrx(n_intp, n_intp, nspin, nspin, kpt%nk, 2))
+     call isdf_parallel(gvec, pol_in, kpt, n_intp, intp, nspin, ncv, maxncv, &
+       invpairmap, kflag, Cmtrx, Mmtrx, .TRUE.)
+     if(peinf%master) write(*,*) 'done isdf'
   endif
   ! The outputs are Cmtrx and Mmtrx, which are used by k_integrate_isdf() for
   ! calculation of K(v,c,v',c') later !!

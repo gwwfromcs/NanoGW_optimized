@@ -77,13 +77,13 @@ program sigma
   integer :: info
   logical :: doisdf
   real(dp), allocatable :: zeta(:,:,:,:)
-  real(dp), allocatable :: Cmtrx(:,:,:,:), Mmtrx(:,:,:,:)
+  real(dp), allocatable :: Cmtrx(:,:,:,:), Mmtrx(:,:,:,:,:,:)
   ! the number of val and cond states pairs. Since there could be two spins,
   ! ncv(1) correspond to spin up, and ncv(2) correspond to spin down.
   ! Assumption: for different kpts, the number of states with the same 
   !  spin are the same 
   integer :: n_intp, maxnj, maxni, i, j, icc, ij, maxnij, &
-           ihomo, ikp, intp_type
+           ihomo, ikp, intp_type, kflag
   ! cvt.f90
   integer, allocatable :: intp(:), pairmap(:,:,:,:), invpairmap(:,:,:,:), &
            ni(:), nj(:), nij(:)
@@ -189,7 +189,7 @@ program sigma
         enddo ! ikp loop
      enddo ! isp loop
      ! if n_intp can not be found in rgwbs.in or invalid (i.e., less than the
-     ! number of occupied states), then set it to a default value
+     ! number of occupied states), then set it to the default value
      if(n_intp .lt. ihomo) then 
         n_intp = int(2.0 * ihomo)
      endif
@@ -207,12 +207,11 @@ program sigma
         write(*,*) 'Type',intp_type,'method for finding interpolation points is',&
            ' not implememted so far. The default method will be used.'
      endif
-     call MPI_BARRIER(peinf%comm,info)
+     call MPI_BARRIER(peinf%comm, info)
     
      if(peinf%master) write(*,*) " Finding interpolation points successfully. "
-     ! For now, only peinf%master uses intp(:) in isdf.F90, so we don't need to
-     ! broadcast it
-     ! call MPI_bcast(intp(1),n_intp,MPI_INTEGER, peinf%masterid,peinf%comm,errinfo)
+     ! broadcast intp to all processors
+     call MPI_bcast(intp(1), n_intp, MPI_INTEGER, peinf%masterid, peinf%comm, info)
      
      allocate(ni(nspin))
      allocate(nj(nspin))
@@ -292,7 +291,7 @@ program sigma
      endif
      maxnij = maxval(nij(:))
      allocate(Cmtrx(n_intp, maxnij, nspin, kpt%nk))
-     allocate(Mmtrx(n_intp, n_intp, nspin, kpt%nk))
+     allocate(Mmtrx(n_intp, n_intp, nspin, nspin, kpt%nk, 2))
      allocate(invpairmap(2,maxnij, nspin, kpt%nk))
      ! set up invpairmap
      do isp = 1, nspin
@@ -414,17 +413,20 @@ program sigma
   ! --- perform ISDF method to interpolate pair products of wave functions ---
   if(doisdf) then
     if (peinf%master) write(*,*) 'call isdf subroutine'
-    call isdf(gvec, pol_in, kpt, n_intp, intp, nspin, nij, maxnij, invpairmap, &
+    kflag = 1
+    if ( nolda ) kflag = 0
+    call isdf_parallel(gvec, pol_in, kpt, n_intp, intp, &
+      nspin, nij, maxnij, invpairmap, kflag, &
       Cmtrx, Mmtrx, .TRUE.) 
     if(peinf%master) write(*,*) 'done isdf'
     call MPI_BARRIER(peinf%comm, info)
   endif
   ! The outputs are Cmtrx and Mmtrx, which are used by k_integrate_isdf() for
-  ! calculation of K(v,c,v',c') later !!
+  ! calculation of K(i,j,k,l) later !!
   ! Note: For wpol_v we also need zeta(:)!!!
   ! --- finished ISDF ---
-
-  !-------------------------------------------------------------------
+  !
+  ! --------------------------------------------------------------------------
   ! Calculate Vxc matrix elements and total energy.
   !
   if (kpt%lcplx) then

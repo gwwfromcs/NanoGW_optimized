@@ -54,7 +54,7 @@ subroutine Zcalculate_tdlda(gvec,kpt,qpt,k_p,pol,nspin,chkpt, &
   ! C matrix 
   real(dp), intent(in) :: Cmtrx(n_intp, maxncv, nspin, kpt%nk)
   ! Mmtrix 
-  real(dp), intent(in) :: Mmtrx(n_intp, n_intp, nspin, kpt%nk)
+  real(dp), intent(in) :: Mmtrx(n_intp, n_intp, nspin, kpt%nk, 2)
 
 
   ! local variables

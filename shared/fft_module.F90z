@@ -182,7 +182,7 @@ contains
 
     ! arguments
     type (gspace), intent(in):: gvec
-    SCALAR, intent(inout) :: rho(gvec%nr)
+    SCALAR, intent(inout) :: rho(gvec%nr * gvec%syms%ntrans)
     integer, intent(in) :: outunit
     logical, intent(in) :: verbose
 

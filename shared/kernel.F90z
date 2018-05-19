@@ -60,7 +60,7 @@ subroutine Zkernel(gvec,kpt,k_mat,irp,kflag,nspin,qkt_in,distrib,readflag,&
   ! C matrix 
   real(dp), intent(in) :: Cmtrx(n_intp, maxncv, nspin, kpt%nk)
   ! Mmtrix 
-  real(dp), intent(in) :: Mmtrx(n_intp, n_intp, nspin, kpt%nk)
+  real(dp), intent(in) :: Mmtrx(n_intp, n_intp, nspin, nspin, kpt%nk, 2)
 
   ! local variables
   type (kernel_scratch), allocatable :: k_tmp(:)

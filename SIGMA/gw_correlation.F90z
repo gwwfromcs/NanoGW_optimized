@@ -21,7 +21,7 @@
 !-------------------------------------------------------------------
 subroutine Zgw_correlation(gvec,kpt,qpt,k_c,pol,sig_in,sig,nspin,nkpt,irp, &
      pol_unit,nn_p,nq,iq,sig_en,nolda,xsum,&
-     Cmtrx, Mmtrx, n_intp, maxc, maxv, maxncv, pairmap)
+     Cmtrx, Mmtrx, n_intp, maxj, maxi, maxnij, pairmap)
 
   use typedefs
   use mpi_module
@@ -55,11 +55,11 @@ subroutine Zgw_correlation(gvec,kpt,qpt,k_c,pol,sig_in,sig,nspin,nkpt,irp, &
   ! f-sum rule
   real(dp), intent(in) :: xsum
   ! Additional input parameters for ISDF method
-  integer, intent(in) :: n_intp, maxc, maxv, maxncv, pairmap(maxv,maxc,nspin,kpt%nk)
+  integer, intent(in) :: n_intp, maxj, maxi, maxnij, pairmap(maxi,maxj,nspin,kpt%nk)
   ! C matrix 
-  real(dp), intent(in) :: Cmtrx(n_intp, maxncv, nspin, kpt%nk)
+  real(dp), intent(in) :: Cmtrx(n_intp, maxnij, nspin, kpt%nk)
   ! Mmtrix 
-  real(dp), intent(in) :: Mmtrx(n_intp, n_intp, nspin, kpt%nk)
+  real(dp), intent(in) :: Mmtrx(n_intp, n_intp, nspin, nspin, kpt%nk, 2)
 
   ! other variables
   integer :: isp, ik, jk, chkpt, info
@@ -93,7 +93,7 @@ subroutine Zgw_correlation(gvec,kpt,qpt,k_c,pol,sig_in,sig,nspin,nkpt,irp, &
      call stopwatch(r_grp%master,' Calling readmatrix kernel_c')
      call timacc(3,1,tsec)
      call Zkernel(gvec,kpt,k_c,irp,0,nspin,qpt%fk(1,iq),'r',.true.,&
-            Cmtrx, Mmtrx, n_intp, maxc, maxv, maxncv, pairmap)
+            Cmtrx, Mmtrx, n_intp, maxj, maxi, maxnij, pairmap)
      call timacc(3,2,tsec)
      call stopwatch(r_grp%master,' Calling potential pot_c ')
      allocate(pot_c(pol%nn,k_c%ncol),stat=info)
@@ -146,7 +146,7 @@ subroutine Zgw_correlation(gvec,kpt,qpt,k_c,pol,sig_in,sig,nspin,nkpt,irp, &
         call stopwatch(r_grp%master,' Calling readmatrix kernel_f')
         call timacc(3,1,tsec)
         call Zkernel(gvec,kpt,k_c,irp,2,nspin,qpt%fk(1,iq),'r',.true.,&
-               Cmtrx, Mmtrx, n_intp, maxc, maxv, maxncv, pairmap)
+               Cmtrx, Mmtrx, n_intp, maxj, maxi, maxnij, pairmap)
         call timacc(3,2,tsec)
         call stopwatch(r_grp%master,' Calling potential pot_f ')
         allocate(pot_f(pol%nn,k_c%ncol),stat=info)
