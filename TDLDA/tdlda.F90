@@ -56,7 +56,7 @@ program tdlda
 #endif
 
   ! W Gao dbg
-  logical :: doisdf, paraisdf
+  logical :: doisdf
   real(dp), allocatable :: zeta(:,:,:,:)
   real(dp), allocatable :: Cmtrx(:,:,:,:), Mmtrx(:,:,:,:,:,:)
   ! the number of val and cond states pairs. Since there could be two spins,
@@ -82,7 +82,7 @@ program tdlda
   !
   if(peinf%master) write (*,*) " Call input_g"
   call input_g(pol_in,qpt,tdldacut,nbuff,lcache,w_grp%npes,&
-       nolda,tamm_d,r_grp%num,dft_code,doisdf,paraisdf,n_intp,intp_type)
+       nolda,tamm_d,r_grp%num,dft_code,doisdf,n_intp,intp_type)
   if(peinf%master) write (*,*) " input_g done"
   call input_t(tamm_d,rpaonly,trip_flag,noxchange,trunc_c)
   
@@ -106,7 +106,7 @@ program tdlda
      if (pol_in(2)%ncond > 0) nmap = max(nmap,maxval(pol_in(2)%cmap))
      if (pol_in(2)%nval > 0) nmap = max(nmap,maxval(pol_in(2)%vmap))
      allocate(wmap(nmap))
-     wmap = .false.
+     wmap = .false. ! Initialization
      do isp = 1, 2
         do ii = 1, pol_in(isp)%ncond
            wmap(pol_in(isp)%cmap(ii)) = .true.
@@ -172,7 +172,9 @@ program tdlda
         n_intp = int(2.0 * ihomo)
      endif
      allocate(intp(n_intp))
+     intp(1:n_intp) = 0
      ! --- find interpolation points for ISDF method ---
+     call stopwatch(peinf%master, "before call cvt")
      if(intp_type .eq. 1) then
         if (peinf%master) then
            write(*,*) " intp_type == 1"
@@ -185,6 +187,7 @@ program tdlda
         write(*,*) 'Type',intp_type,'method for finding interpolation points is',&
            ' not implememted so far. The default method will be used.'
      endif
+     call stopwatch(peinf%master, "after call cvt")
      call MPI_BARRIER(peinf%comm,info)
       
      if(peinf%master) write(*,*) " Finding interpolation points successfully. "
@@ -194,11 +197,14 @@ program tdlda
      ! ISDF will deal with all the pair products of wave functions as defined in
      ! pol_in(isp)%vmap(:) and pol_in(isp)%cmap(:)
      allocate(ncv(nspin))
+     ncv(1:nspin) = 0 ! Initialization
      do isp = 1, nspin
         ncv(isp) = pol_in(isp)%nval * pol_in(isp)%ncond
      enddo
-   
-     maxncv = max(ncv(1), ncv(2))
+     
+     if (nspin == 2) maxncv = max(ncv(1), ncv(2))
+     if (nspin == 1) maxncv = ncv(1)
+     write(6, *) "ncv", ncv(:), " maxncv", maxncv
      maxv = 0 ! the absolute index of the highest occupied state
      maxc = 0 ! the absolute index of the highest occupied state
      do isp = 1, nspin
@@ -207,9 +213,8 @@ program tdlda
      enddo
      allocate(pairmap(maxv, maxc, nspin, kpt%nk))
      allocate(invpairmap(2, maxncv, nspin, kpt%nk))
-
-     pairmap = 0
-     invpairmap = 0
+     pairmap = 0     ! Initialization
+     invpairmap = 0  ! Initialization
      do isp = 1, nspin
         do ikp = 1, kpt%nk
            icv = 0
@@ -263,17 +268,23 @@ program tdlda
 
   ! --- perform ISDF method to interpolate pair products of wave functions ---
   if(doisdf) then
+     call stopwatch(peinf%master, "before call isdf")
      if (peinf%master) write(*,*) 'call isdf subroutine'
      kflag = 1 
      if ( trip_flag ) kflag = 3 
      if ( noxchange ) kflag = 2
      if ( nolda )     kflag = 0
-     allocate(Cmtrx(n_intp, maxncv, nspin, kpt%nk))
-     allocate(Mmtrx(n_intp, n_intp, nspin, nspin, kpt%nk, 2))
+     write(*, *) n_intp, maxncv, nspin, kpt%nk
+     allocate(Cmtrx(n_intp, maxncv, nspin, kpt%nk)) 
+     ! Cmtrx is intialized to zero in isdf_parallel.f90
+     allocate(Mmtrx(n_intp, n_intp, nspin, nspin, kpt%nk, 2)) 
+     ! Mmtrx is intialized to zero in isdf_parallel.f90
      call isdf_parallel(gvec, pol_in, kpt, n_intp, intp, nspin, ncv, maxncv, &
        invpairmap, kflag, Cmtrx, Mmtrx, .TRUE.)
      if(peinf%master) write(*,*) 'done isdf'
+     call stopwatch(peinf%master, "after call isdf")
   endif
+
   ! The outputs are Cmtrx and Mmtrx, which are used by k_integrate_isdf() for
   ! calculation of K(v,c,v',c') later !!
   ! --- finished ISDF ---
@@ -349,6 +360,7 @@ program tdlda
 
   ii = 0
   xmax = zero
+  call stopwatch(peinf%master, "after call calculate_tdlda")
   if (kpt%lcplx) then
      call zcalculate_tdlda(gvec,kpt,qpt,k_p,pol,nspin,ii, &
           tamm_d,nolda,rpaonly,trip_flag,noxchange,trunc_c,xsum,xmax, &
@@ -358,6 +370,7 @@ program tdlda
           tamm_d,nolda,rpaonly,trip_flag,noxchange,trunc_c,xsum,xmax, &
           Cmtrx, Mmtrx, n_intp, maxc, maxv, maxncv, pairmap)
   endif
+  call stopwatch(peinf%master, "after call calculate_tdlda")
 
   close(outdbg)
 

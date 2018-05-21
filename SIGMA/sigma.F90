@@ -195,6 +195,7 @@ program sigma
      endif
      allocate(intp(n_intp))
      ! --- find interpolation points for ISDF method ---
+     call stopwatch(peinf%master, "before call cvt")
      if(intp_type .eq. 1) then
         if (peinf%master) then
            write(*,*) " intp_type == 1"
@@ -207,6 +208,7 @@ program sigma
         write(*,*) 'Type',intp_type,'method for finding interpolation points is',&
            ' not implememted so far. The default method will be used.'
      endif
+     call stopwatch(peinf%master, "after call cvt")
      call MPI_BARRIER(peinf%comm, info)
     
      if(peinf%master) write(*,*) " Finding interpolation points successfully. "
@@ -413,6 +415,7 @@ program sigma
   ! --- perform ISDF method to interpolate pair products of wave functions ---
   if(doisdf) then
     if (peinf%master) write(*,*) 'call isdf subroutine'
+    call stopwatch(peinf%master, "before call isdf")
     kflag = 1
     if ( nolda ) kflag = 0
     call isdf_parallel(gvec, pol_in, kpt, n_intp, intp, &
@@ -420,6 +423,7 @@ program sigma
       Cmtrx, Mmtrx, .TRUE.) 
     if(peinf%master) write(*,*) 'done isdf'
     call MPI_BARRIER(peinf%comm, info)
+    call stopwatch(peinf%master, "after call isdf")
   endif
   ! The outputs are Cmtrx and Mmtrx, which are used by k_integrate_isdf() for
   ! calculation of K(i,j,k,l) later !!

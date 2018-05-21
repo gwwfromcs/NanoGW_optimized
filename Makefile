@@ -13,7 +13,8 @@
 #####################
 
 #MACH = cori.serial
-MACH = ices
+#MACH = ices
+MACH = edison
 
 # Version date: must have exactly 28 characters!
 VERSIONDATE = "Fri Jan  2 17:07:49 EST 2009"

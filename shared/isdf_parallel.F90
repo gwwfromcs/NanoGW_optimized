@@ -196,14 +196,14 @@ subroutine isdf_parallel(gvec, pol_in, kpt, n_intp, intp, &
         do ikp = 1, kpt%nk
            !
            if (verbose .and. w_grp%master) &
-              write(*, *) ' isp = ', isp, ', ikp = ', ikp
+              write(dbgunit, *) ' isp = ', isp, ', ikp = ', ikp
            !
            do icv = 1, ncv(isp)
               !
               IVV = invpairmap(1,icv,isp,ikp)
               ICC = invpairmap(2,icv,isp,ikp)
               if (verbose .and. w_grp%master) &
-                 write(*, '(a,i5,a,i5)') " ivv = ", ivv, " icc = ", icc
+                 write(dbgunit, '(a,i5,a,i5)') " ivv = ", ivv, " icc = ", icc
               JVV = kpt%wfn(isp,ikp)%map(IVV)
               JCC = kpt%wfn(isp,ikp)%map(ICC)
               !
@@ -262,7 +262,28 @@ subroutine isdf_parallel(gvec, pol_in, kpt, n_intp, intp, &
               MPI_DOUBLE, MPI_SUM, w_grp%comm, errinfo )
            if(w_grp%master .and. verbose) then
               write(dbgunit, *) " Cmtrx = "
-              call printmatrix ( Cmtrx(1,1,isp,ikp), n_intp, ncv(isp), dbgunit )
+              do ii = 1, 4
+                do jj = 1, 5
+                   write(dbgunit, '(3x, e12.5)', advance='no') Cmtrx(ii,jj,isp,ikp)
+                enddo
+                write(dbgunit, '(" ... ")', advance='no')
+                do jj = ncv(isp)-4, ncv(isp)
+                   write(dbgunit, '(3x, e12.5)', advance='no') Cmtrx(ii,jj,isp,ikp)
+                enddo
+                write(dbgunit, *)
+              enddo
+              write(dbgunit, *) " ... ... "
+              do ii = n_intp-3, n_intp 
+                do jj = 1, 5
+                   write(dbgunit, '(3x, e12.5)', advance='no') Cmtrx(ii,jj,isp,ikp)
+                enddo
+                write(dbgunit, '(" ... ")', advance='no')
+                do jj = ncv(isp)-4, ncv(isp)
+                   write(dbgunit, '(3x, e12.5)', advance='no') Cmtrx(ii,jj,isp,ikp)
+                enddo
+                write(dbgunit, *)
+              enddo
+              call printmatrix ( Cmtrx(1,1,isp,ikp), n_intp, maxncv, dbgunit )
            endif
            !
            ! ---------------------

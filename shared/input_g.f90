@@ -11,7 +11,7 @@
 !
 !-------------------------------------------------------------------
 subroutine input_g(pol_in,qpt,tdldacut,nbuff,lcache,wgr_npes, &
-      nolda,tamm_d,rgr_num,dft_code,doisdf,paraisdf,n_intp,intp_type)
+      nolda,tamm_d,rgr_num,dft_code,doisdf,n_intp,intp_type)
 
   use typedefs
   use esdf
@@ -43,7 +43,7 @@ subroutine input_g(pol_in,qpt,tdldacut,nbuff,lcache,wgr_npes, &
   integer, dimension(maxdata,2) :: vmap, cmap
 
   ! variables for ISDF method
-  logical, intent(out) :: doisdf, paraisdf
+  logical, intent(out) :: doisdf
   integer, intent(out) :: n_intp
   integer, intent(out) :: intp_type
 
@@ -78,8 +78,6 @@ subroutine input_g(pol_in,qpt,tdldacut,nbuff,lcache,wgr_npes, &
   ! read variables for ISDF method
   doisdf = (esdf_defined('doisdf'))
 
-  paraisdf = (esdf_defined('parallelisdf'))
-  
   n_intp = esdf_integer('num_isdf_points',-1)
 
   intp_type = esdf_integer('intp_type',1)

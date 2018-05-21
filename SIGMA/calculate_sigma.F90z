@@ -249,6 +249,7 @@ subroutine Zcalculate_sigma(nspin,nkpt,n_it,it_scf,nr_buff,sig_en, &
      endif
 
      do iq = 1, qpt%nk
+        call stopwatch(peinf%master, "before call gw_correlation")
         do jrp = 1, gvec%syms%ntrans/r_grp%num
            irp = r_grp%g_rep(jrp)
            if ( (chkpt-(qpt%nk+iq)*gvec%syms%ntrans >= irp) ) cycle
@@ -257,6 +258,7 @@ subroutine Zcalculate_sigma(nspin,nkpt,n_it,it_scf,nr_buff,sig_en, &
                 pol_unit,k_p(irp,iq)%nn,qpt%nk,iq,sig_en,nolda,xsum, &
                 Cmtrx, Mmtrx, n_intp, maxj, maxi, maxnij, pairmap)
         enddo
+        call stopwatch(peinf%master, "after call gw_correlation")
 #ifdef MPI
         !-------------------------------------------------------------------
         ! Since the polarizability representations are distributed, the PEs
