@@ -39,17 +39,11 @@ program chkpt_bin_asc
 
   integer, parameter :: iunit = 60, ounit = 70
   integer :: isp, ii, jj, ien, ik, chkpt, nspin, nkpt, xcflag
-<<<<<<< HEAD
   integer :: ndiag_s, ndiag, noffd_s, noffd, nen, nmap, static_type
   real(dp) :: deltae
   real(dp), allocatable :: sigma(:,:,:), sigma_vxc(:,:,:), e0(:), eqp(:)
   integer, dimension(:) , allocatable :: map, diag, off1, off2
-=======
-  integer :: ndiag_s, ndiag, noffd_s, noffd, nen, nmap
-  real(dp) :: deltae
-  real(dp), allocatable :: sigma(:,:,:), sigma_vxc(:,:,:), e0(:), eqp(:)
-  integer, dimension(:) , allocatable :: map, diag, off1, off2, static_type
->>>>>>> 538a3eadd677ea477bc9f055d44dd1fd7aff99ec
+
   complex(dpc) :: z_spectr
   complex(dpc), allocatable :: zsigma(:,:,:)
   complex(dpc), allocatable :: static_remainder(:)
