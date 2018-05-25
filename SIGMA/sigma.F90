@@ -108,8 +108,12 @@ program sigma
        nolda,tamm_d,r_grp%num,dft_code,doisdf,n_intp,intp_type,.false.)
   call MPI_BARRIER(peinf%comm,info)
   call input_s(sig_in,kpt_sig,snorm,writeqp,readvxc,readocc,cohsex, &
+<<<<<<< HEAD
        hqp_sym,n_it,chkpt_in,static_type,sig_en,max_conv,xbuff,ecuts, &
        qpmix,sig_cut,.false.)
+=======
+       hqp_sym,n_it,chkpt_in,sig_en,max_conv,xbuff,ecuts,qpmix,sig_cut,.false.)
+>>>>>>> 538a3eadd677ea477bc9f055d44dd1fd7aff99ec
   call MPI_BARRIER(peinf%comm,info)
 
   !-------------------------------------------------------------------
