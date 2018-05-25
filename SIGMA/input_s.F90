@@ -8,7 +8,8 @@
 !
 !-------------------------------------------------------------------
 subroutine input_s(sig,kpt_sig,snorm,writeqp,readvxc,readocc,cohsex, &
-     hqp_sym,n_it,chkpt,sig_en,max_conv,xbuff,ecuts,qpmix,sig_cut)
+     hqp_sym,n_it,chkpt,static_type,sig_en, &
+     max_conv,xbuff,ecuts,qpmix,sig_cut,verbose)
 
   use typedefs
   use esdf
@@ -27,10 +28,13 @@ subroutine input_s(sig,kpt_sig,snorm,writeqp,readvxc,readocc,cohsex, &
        readocc, &    ! true if orbital occupancies should be read
        cohsex, &     ! true if COHSEX (=static) approximation is used
        hqp_sym       ! true if H_qp is symmetrized
+  logical, intent(in)  :: &
+       verbose       ! true for printing out extra info
   integer, intent(out) :: &
        n_it, &       ! number of self-consistent iterations
        chkpt, &      ! checkpoint flag
-       sig_en        ! number of energy points where self-energy is calculated
+       sig_en, &     ! number of energy points where self-energy is calculated
+       static_type   ! type of static correction
   real(dp), intent(out) :: &
        max_conv, &   ! tolerance in convergence test, during self-consistency 
        xbuff, &      ! size of buffer arrays in wpol0
@@ -118,6 +122,14 @@ subroutine input_s(sig,kpt_sig,snorm,writeqp,readvxc,readocc,cohsex, &
   sig_cut = esdf_physical('self_energy_cutoff',zero,'eV')
 
   hqp_sym = (.not. esdf_defined('no_hqp_symmetrize'))
+
+  static_type = esdf_integer('static_type',2)
+  if ( static_type .lt. 1 .or. static_type .gt. 2) then
+     write(6, *) "WARNINING: static_type is not right."
+     write(6, *) "   Please choose static_type = 1 or 2."
+     static_type = 2
+     write(6, *) "   Program will use the default value 2."
+  endif
 
   tstring = esdf_reduce(esdf_string('sigma_energy','left'))
   select case (trim(tstring))
@@ -232,7 +244,7 @@ subroutine input_s(sig,kpt_sig,snorm,writeqp,readvxc,readocc,cohsex, &
   endif
 
   ! Weiwei Gao: for debug 
-  if(peinf%master) then
+  if(peinf%master .and. verbose) then
      write(6,'(" in input_s() ")')
      write(6,'("    ii    sig%map")')
      do ii = 1, sig%nmap

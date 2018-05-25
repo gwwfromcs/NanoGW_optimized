@@ -68,7 +68,7 @@ program sigma
   logical :: nolda, tamm_d, snorm, writeqp, readvxc, &
        readocc, cohsex, init_gr, hqp_sym, lstop
   integer :: ii, irp, iq, ik, nmap, nspin, nbuff, lcache, isp, it_scf, &
-       chkpt_in, n_it, nr_buff, sig_en, nkpt, dft_code
+       chkpt_in, n_it, nr_buff, sig_en, nkpt, dft_code, static_type
   real(dp) :: tsec(2), mem1, mem2, mem3, xsum, xmax, rtmp, tdldacut, &
         max_sig, max_conv, xbuff, ecuts, qpmix, sig_cut
   logical, allocatable :: wmap(:)
@@ -105,10 +105,11 @@ program sigma
   ! Read input parameters from rgwbs.in.
   !
   call input_g(pol_in,qpt,tdldacut,nbuff,lcache,w_grp%npes, &
-       nolda,tamm_d,r_grp%num,dft_code,doisdf,n_intp,intp_type)
+       nolda,tamm_d,r_grp%num,dft_code,doisdf,n_intp,intp_type,.false.)
   call MPI_BARRIER(peinf%comm,info)
   call input_s(sig_in,kpt_sig,snorm,writeqp,readvxc,readocc,cohsex, &
-       hqp_sym,n_it,chkpt_in,sig_en,max_conv,xbuff,ecuts,qpmix,sig_cut)
+       hqp_sym,n_it,chkpt_in,static_type,sig_en,max_conv,xbuff,ecuts, &
+       qpmix,sig_cut,.false.)
   call MPI_BARRIER(peinf%comm,info)
 
   !-------------------------------------------------------------------
@@ -648,14 +649,14 @@ program sigma
   do it_scf = 0, n_it
 
      if (kpt%lcplx) then
-        call zcalculate_sigma(nspin,kpt_sig%nk,n_it,it_scf,nr_buff,sig_en, &
-             dft_code,chkpt_in,gvec,kpt,qpt,k_c,k_p,pol,sig_in, &
+        call zcalculate_sigma(nspin,kpt_sig%nk,n_it,it_scf,nr_buff,static_type, &
+             sig_en,dft_code,chkpt_in,gvec,kpt,qpt,k_c,k_p,pol,sig_in, &
              sig,q_p,nolda,tamm_d,writeqp,snorm,cohsex,hqp_sym,lstop, &
              ecuts,qpmix,sig_cut,max_sig,&
              Cmtrx, Mmtrx, n_intp, maxnj, maxni, maxnij, pairmap)
      else
-        call dcalculate_sigma(nspin,kpt_sig%nk,n_it,it_scf,nr_buff,sig_en, &
-             dft_code,chkpt_in,gvec,kpt,qpt,k_c,k_p,pol,sig_in, &
+        call dcalculate_sigma(nspin,kpt_sig%nk,n_it,it_scf,nr_buff,static_type, &
+             sig_en,dft_code,chkpt_in,gvec,kpt,qpt,k_c,k_p,pol,sig_in, &
              sig,q_p,nolda,tamm_d,writeqp,snorm,cohsex,hqp_sym,lstop, &
              ecuts,qpmix,sig_cut,max_sig,&
              Cmtrx, Mmtrx, n_intp, maxnj, maxni, maxnij, pairmap)

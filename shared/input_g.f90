@@ -11,7 +11,7 @@
 !
 !-------------------------------------------------------------------
 subroutine input_g(pol_in,qpt,tdldacut,nbuff,lcache,wgr_npes, &
-      nolda,tamm_d,rgr_num,dft_code,doisdf,n_intp,intp_type)
+      nolda,tamm_d,rgr_num,dft_code,doisdf,n_intp,intp_type,verbose)
 
   use typedefs
   use esdf
@@ -35,6 +35,7 @@ subroutine input_g(pol_in,qpt,tdldacut,nbuff,lcache,wgr_npes, &
   logical, intent(out) :: &
        nolda, &      ! true if LDA kernel is not used
        tamm_d        ! true if Tamm-Dancof approximation is used
+  logical, intent(in) :: verbose ! if true, prinout extra debug info
 
   ! local variables
   character (len=80) :: strflag
@@ -176,24 +177,24 @@ subroutine input_g(pol_in,qpt,tdldacut,nbuff,lcache,wgr_npes, &
   enddo
   
   ! W Gao dbg 
-  if(peinf%master) then
+  if(peinf%master .and. verbose) then
      do ii = 1, 2
         if (pol_in(ii)%nval /= 0) then
-           write(*,'("pol_in(",i2,")%nval = ",i8)') ii,pol_in(ii)%nval
-           write(*,'("     j      vmap(j) ")')
+           write(6,'("pol_in(",i2,")%nval = ",i8)') ii,pol_in(ii)%nval
+           write(6,'("     j      vmap(j) ")')
            do jj = 1, pol_in(ii)%nval
-              write(*,'(i8,i8)') jj, pol_in(ii)%vmap(jj)
+              write(6,'(i8,i8)') jj, pol_in(ii)%vmap(jj)
            enddo
         endif
-        write(*,'()')
+        write(6,'()')
         if (pol_in(ii)%ncond /= 0) then
-           write(*,'("pol_in(",i2,")%ncond = ",i8)') ii,pol_in(ii)%ncond
-           write(*,'("     i      cmap(i) ")')
+           write(6,'("pol_in(",i2,")%ncond = ",i8)') ii,pol_in(ii)%ncond
+           write(6,'("     i      cmap(i) ")')
            do jj = 1, pol_in(ii)%ncond
-              write(*,'(i8,i8)') jj, pol_in(ii)%cmap(jj)
+              write(6,'(i8,i8)') jj, pol_in(ii)%cmap(jj)
            enddo
         endif
-        write(*,'()')
+        write(6,'()')
      enddo
   endif
         

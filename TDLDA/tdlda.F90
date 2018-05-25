@@ -82,7 +82,7 @@ program tdlda
   !
   if(peinf%master) write (*,*) " Call input_g"
   call input_g(pol_in,qpt,tdldacut,nbuff,lcache,w_grp%npes,&
-       nolda,tamm_d,r_grp%num,dft_code,doisdf,n_intp,intp_type)
+       nolda,tamm_d,r_grp%num,dft_code,doisdf,n_intp,intp_type,.false.)
   if(peinf%master) write (*,*) " input_g done"
   call input_t(tamm_d,rpaonly,trip_flag,noxchange,trunc_c)
   
@@ -260,9 +260,9 @@ program tdlda
   call stopwatch(peinf%master,'Calling setup_g')
   call timacc(2,1,tsec)
   if (kpt%lcplx) then
-     call zsetup_g(gvec,kpt,qpt,pol_in,pol,k_p,nspin,tdldacut)
+     call zsetup_g(gvec,kpt,qpt,pol_in,pol,k_p,nspin,tdldacut,.false.)
   else
-     call dsetup_g(gvec,kpt,qpt,pol_in,pol,k_p,nspin,tdldacut)
+     call dsetup_g(gvec,kpt,qpt,pol_in,pol,k_p,nspin,tdldacut,.false.)
   call timacc(2,2,tsec)
   endif
 
