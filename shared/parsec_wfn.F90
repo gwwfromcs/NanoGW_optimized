@@ -140,16 +140,11 @@ subroutine parsec_wfn(gvec,kpt,nmap,nspin,wmap,init_gr)
         endif
         if (gvec%per > 0) then
            read(infile) gvec%step
-           write(6,*) "1" ! dbg 
            read(infile) gvec%avec
-           write(6,*) "2" ! dbg 
            read(infile) fd%lap_dir_num
-           write(6,*) "3" ! dbg 
            read(infile) (fd%lap_dir(ii),ii=1,3) !, &
            !     ((fd%lap_neig(ii,jj),ii=1,3),jj=1,3)  ! W.Gao: lap_neig is not written by parsec1.4
-           write(6,*) "4" ! dbg 
            read(infile) (fd%lap_dir_step(ii),ii=1,3) !, fd%b_lap  ! W.Gao: b_lap is not written by parsec1.4
-           write(6,*) "5" ! dbg 
            ii = 3
            do jj = 1, 3
               if (fd%lap_dir(jj) /= 0) then
@@ -176,16 +171,13 @@ subroutine parsec_wfn(gvec,kpt,nmap,nspin,wmap,init_gr)
            fd%lap_neig(3,3) = 1
            fd%lap_dir_step(1:3) = gvec%step(1:3)
            read(infile) kpt%nk
-           write(6,*) "6" ! dbg 
            read(infile)
            read(infile)
            read(infile)
            allocate(kpt%fk(3,kpt%nk))
            read(infile) kpt%fk
-           write(6,*) "7" ! dbg 
            allocate(kpt%weight(kpt%nk))
            read(infile) kpt%weight
-           write(6,*) "8" ! dbg
         else
            read(infile) rtmp
            gvec%step = rtmp
@@ -646,7 +638,7 @@ subroutine parsec_wfn(gvec,kpt,nmap,nspin,wmap,init_gr)
         enddo
 
         ! W Gao dbg
-        if(peinf%master) then
+        if(peinf%master .and. .false.) then
           write(*,'("isp = ",i2," ikp = ",i4)') isp, ikp
           write(*,'("    i   wfn%map(ii) ")')
           do ii = 1, kpt%wfn(isp,ikp)%nstate
@@ -657,9 +649,10 @@ subroutine parsec_wfn(gvec,kpt,nmap,nspin,wmap,init_gr)
             write(*,'(2i8)') ii, kpt%wfn(isp,ikp)%imap(ii)
           enddo
         endif
+        ! dbg
      enddo ! ikp
   enddo ! isp
-
+   
   !-------------------------------------------------------------------
   ! Save electron density.
   !

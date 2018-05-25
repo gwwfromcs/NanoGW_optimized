@@ -105,10 +105,10 @@ program sigma
   ! Read input parameters from rgwbs.in.
   !
   call input_g(pol_in,qpt,tdldacut,nbuff,lcache,w_grp%npes, &
-       nolda,tamm_d,r_grp%num,dft_code,doisdf,n_intp,intp_type)
+       nolda,tamm_d,r_grp%num,dft_code,doisdf,n_intp,intp_type,.false.)
   call MPI_BARRIER(peinf%comm,info)
   call input_s(sig_in,kpt_sig,snorm,writeqp,readvxc,readocc,cohsex, &
-       hqp_sym,n_it,chkpt_in,sig_en,max_conv,xbuff,ecuts,qpmix,sig_cut)
+       hqp_sym,n_it,chkpt_in,sig_en,max_conv,xbuff,ecuts,qpmix,sig_cut,.false.)
   call MPI_BARRIER(peinf%comm,info)
 
   !-------------------------------------------------------------------

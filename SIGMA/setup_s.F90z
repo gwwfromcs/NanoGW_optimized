@@ -80,7 +80,7 @@ subroutine Zsetup_s(gvec,kpt,qpt,kpt_sig,sig_in,sig,pol_in,pol,k_p,k_c, &
         call die('Stop')
      endif
   else
-     call Zsetup_g(gvec,kpt,qpt,pol_in,pol,k_p,nspin,tdldacut)
+     call Zsetup_g(gvec,kpt,qpt,pol_in,pol,k_p,nspin,tdldacut,.false.)
   endif
   !
   ! Do the q-vectors form a regular grid?
@@ -242,7 +242,7 @@ subroutine Zsetup_s(gvec,kpt,qpt,kpt_sig,sig_in,sig,pol_in,pol,k_p,k_c, &
               enddo
            enddo
            ! --- Weiwei Gao: debug ---
-           if(peinf%master) then
+           if ( peinf%master .and. verbose ) then
               write(6,'(" In setup_s() ")')
               write(6,'("  ii  map_c")')
               do ii = 1, n_c

@@ -8,8 +8,8 @@
 ! This file is part of RGWBS. It is distributed under the GPL v1.
 !
 !---------------------------------------------------------------
-subroutine Zcalculate_sigma(nspin,nkpt,n_it,it_scf,nr_buff,sig_en, &
-     dft_code,chkpt_in,gvec,kpt,qpt,k_c,k_p,pol,sig_in, &
+subroutine Zcalculate_sigma(nspin,nkpt,n_it,it_scf,nr_buff,static_type, &
+     sig_en,dft_code,chkpt_in,gvec,kpt,qpt,k_c,k_p,pol,sig_in, &
      sig,q_p,nolda,tamm_d,writeqp,snorm,cohsex,hqp_sym,lstop, &
      ecuts,qpmix,sig_cut,max_sig,&
      Cmtrx, Mmtrx, n_intp, maxj, maxi, maxnij, pairmap)
@@ -29,7 +29,8 @@ subroutine Zcalculate_sigma(nspin,nkpt,n_it,it_scf,nr_buff,sig_en, &
        it_scf, &   ! iteration counter
        nr_buff, &  ! number of grid points where static potentials are computed
        sig_en, &   ! number of energy values where self-energy is computed
-       dft_code    ! choice of DFT code
+       dft_code, & ! choice of DFT code
+       static_type ! type of static correction for correlation self energy
   integer, intent(inout) :: chkpt_in ! checkpoint flag
   ! real-space grid
   type (gspace), intent(inout) :: gvec
@@ -511,20 +512,23 @@ subroutine Zcalculate_sigma(nspin,nkpt,n_it,it_scf,nr_buff,sig_en, &
            !
            if (staticcorr) then
               do isig = 1, sig(isp,ik)%ndiag
+                 ! The static remainder is divided by static_type=2.0 for
+                 ! get better convergence.
+                 ! static_type is guaranteed to be either 1 or 2 in input_s.f90
                  sig(isp,ik)%scdiag(:,isig) = sig(isp,ik)%scdiag(:,isig) + &
-                      sig(isp,ik)%scsdiag(isig)
+                      sig(isp,ik)%scsdiag(isig)/real(static_type,dp)
                  sig(isp,ik)%sgdiag(:,isig) = sig(isp,ik)%sgdiag(:,isig) + &
-                      sig(isp,ik)%sgsdiag(isig)
+                      sig(isp,ik)%sgsdiag(isig)/real(static_type,dp)
               enddo
               do isig = 1, sig(isp,ik)%noffd
                  sig(isp,ik)%scoffd(1,isig) = sig(isp,ik)%scoffd(1,isig) + &
-                      sig(isp,ik)%scsoffd(isig)
+                      sig(isp,ik)%scsoffd(isig)/real(static_type,dp)
                  sig(isp,ik)%sgoffd(1,isig) = sig(isp,ik)%sgoffd(1,isig) + &
-                      sig(isp,ik)%sgsoffd(isig)
+                      sig(isp,ik)%sgsoffd(isig)/real(static_type,dp)
                  sig(isp,ik)%scoffd(2,isig) = sig(isp,ik)%scoffd(2,isig) + &
-                      conjg(sig(isp,ik)%scsoffd(isig))
+                      conjg(sig(isp,ik)%scsoffd(isig))/real(static_type,dp)
                  sig(isp,ik)%sgoffd(2,isig) = sig(isp,ik)%sgoffd(2,isig) + &
-                      conjg(sig(isp,ik)%sgsoffd(isig))
+                      conjg(sig(isp,ik)%sgsoffd(isig))/real(static_type,dp)
               enddo
               if (gvec%per > 0) then
                  if (nspin == 1) then

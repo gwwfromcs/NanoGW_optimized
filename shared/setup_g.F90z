@@ -13,7 +13,7 @@
 ! This file is part of RGWBS. It is distributed under the GPL v1.
 !
 !-------------------------------------------------------------------
-subroutine Zsetup_g(gvec,kpt,qpt,pol_in,pol,k_p,nspin,tdldacut)
+subroutine Zsetup_g(gvec,kpt,qpt,pol_in,pol,k_p,nspin,tdldacut,verbose)
 
   use typedefs
   use mpi_module
@@ -28,6 +28,8 @@ subroutine Zsetup_g(gvec,kpt,qpt,pol_in,pol,k_p,nspin,tdldacut)
   type (kernelinfo), dimension(gvec%syms%ntrans,qpt%nk), intent(inout) :: k_p
   ! number of spins
   integer, intent(in) :: nspin
+  ! whether printout extra debug info
+  integer, intent(in) :: verbose
   ! TDLDA cutoff, in Ry
   real(dp), intent(in) :: tdldacut
 
@@ -44,7 +46,7 @@ subroutine Zsetup_g(gvec,kpt,qpt,pol_in,pol,k_p,nspin,tdldacut)
         call Zget_dipole(gvec,kpt%wfn(isp,ik),ik,kpt%fk(1,ik), &
              kpt%wfn(isp,ik)%occ0)
         ! W Gao dbg 
-        if(peinf%master) then
+        if(peinf%master .and. verbose) then
           write(*, '(" isp = ",i2," ik = ",i4)') isp, ik
           write(*, '("    ii    mapd(1,ii)  mapd(2,ii)" )')
           do ii = 1, kpt%wfn(isp,ik)%ndip
