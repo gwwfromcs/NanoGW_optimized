@@ -83,10 +83,10 @@ program sigma
   ! Assumption: for different kpts, the number of states with the same 
   !  spin are the same 
   integer :: n_intp, maxnj, maxni, i, j, icc, ij, maxnij, &
-           ihomo, ikp, intp_type, kflag
+           ihomo, ikp, intp_type, isdf_type, kflag
   ! cvt.f90
   integer, allocatable :: intp(:), pairmap(:,:,:,:), invpairmap(:,:,:,:), &
-           ni(:), nj(:), nij(:)
+           ni(:), nj(:), nij(:), iilist(:,:), ijlist(:,:)
 
   ! WG debug
   integer :: outdbg
@@ -105,7 +105,8 @@ program sigma
   ! Read input parameters from rgwbs.in.
   !
   call input_g(pol_in,qpt,tdldacut,nbuff,lcache,w_grp%npes, &
-       nolda,tamm_d,r_grp%num,dft_code,doisdf,n_intp,intp_type,.false.)
+       nolda,tamm_d,r_grp%num,dft_code,doisdf,n_intp,intp_type,isdf_type,.false.)
+  write(6, *) "isdf_type = ", isdf_type
   call MPI_BARRIER(peinf%comm,info)
   call input_s(sig_in,kpt_sig,snorm,writeqp,readvxc,readocc,cohsex, &
        nooffd,hqp_sym,n_it,chkpt_in,static_type,sig_en,max_conv,xbuff,ecuts, &
@@ -220,7 +221,9 @@ program sigma
      allocate(nj(nspin))
      allocate(nij(nspin))
      do isp = 1, nspin 
-       ni(isp) = maxval(pol_in(isp)%vmap(:))
+       ! For now, I assume all the valance states are included, this is not necessarily true in all cases
+       ! We should change this later to save some computational costs.
+       ni(isp) = maxval(pol_in(isp)%vmap(:)) 
        do ii = 1, sig_in%ndiag_s
           if(sig_in%diag(ii) > ni(isp)) ni(isp) = sig_in%diag(ii)
        enddo
@@ -231,10 +234,20 @@ program sigma
      enddo
      maxni = maxval(ni(:))
      maxnj = maxval(nj(:))
-     
+     ! obtain nv(isp), ivlist(nv(isp),isp), nc(isp) and iclist(nc(isp),isp)
+     allocate(iilist(maxni,nspin))
+     allocate(ijlist(maxnj,nspin))
+     do isp = 1, nspin
+       do ii = 1, ni(isp)
+         iilist(ii,isp) = ii
+       enddo
+       do ij = 1, nj(isp)
+         ijlist(ij,isp) = ij
+       enddo
+     enddo 
      allocate(pairmap(maxni, maxnj, nspin, kpt%nk))
      pairmap = 0
-     ! We assume pairmap is the same for different kpt
+     ! For now, we assume pairmap is the same for different kpt
      do isp = 1, nspin
         do ikp = 1, kpt%nk
            ij = 0
@@ -419,9 +432,17 @@ program sigma
     call stopwatch(peinf%master, "before call isdf")
     kflag = 1
     if ( nolda ) kflag = 0
-    call isdf_parallel(gvec, pol_in, kpt, n_intp, intp, &
-      nspin, nij, maxnij, invpairmap, kflag, &
-      Cmtrx, Mmtrx, .TRUE.) 
+    if ( isdf_type == 1 ) then
+      write(6,*) " Call isdf_parallel()"
+      call isdf_parallel(gvec, pol_in, kpt, n_intp, intp, &
+        nspin, nij, maxnij, invpairmap, kflag, &
+        Cmtrx, Mmtrx, .TRUE.) 
+    else
+      write(6,*) " Call isdf_parallel2()"
+      call isdf_parallel2(gvec, pol_in, kpt, n_intp, intp, &
+        nspin, nij, maxnij, invpairmap, ni, maxni, iilist, nj, maxnj, ijlist, kflag, &
+        Cmtrx, Mmtrx, .TRUE.) 
+    endif
     if(peinf%master) write(*,*) 'done isdf'
     call MPI_BARRIER(peinf%comm, info)
     call stopwatch(peinf%master, "after call isdf")

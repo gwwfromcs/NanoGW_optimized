@@ -30,7 +30,7 @@ PSRCZ	= calculate_tdlda.F90z calculate_sigma.F90z charac_group.F90z \
 	  k_integrate_isdf.F90z
 PSRC	= die.F90 grid_setup.F90 finalize.F90 input_s.F90 paratec_wfn.F90 \
 	  parsec_wfn.F90 printsigma.F90 qp_eigensolver.F90 \
-	  save_sigma.F90 sigma.F90 isdf_parallel.F90 cvt_wfn.F90
+	  save_sigma.F90 sigma.F90 isdf_parallel.F90 isdf_parallel2.F90 cvt_wfn.F90
 
 OBJ	= $(SRC:.f90=.o)
 POBJ	= $(PSRC:.F90=.o)

@@ -63,14 +63,15 @@ program tdlda
   ! ncv(1) correspond to spin up, and ncv(2) correspond to spin down.
   ! Assumption: for different kpts, the number of states with the same 
   !  spin are the same 
-  integer :: n_intp, maxc, maxv, iv, ic, ivv, icc, icv, maxncv,&
-           ihomo, ikp, intp_type, kflag
+  integer :: n_intp, maxc, maxv, iv, ic, ivv, icc, icv, maxnc, maxnv, maxncv,&
+           ihomo, ikp, intp_type, isdf_type, kflag
   ! cvt.f90
   integer, allocatable :: intp(:), pairmap(:,:,:,:), invpairmap(:,:,:,:), &
-           ncv(:)
+           ncv(:), ivlist(:,:), iclist(:,:), nv(:), nc(:)
 
   ! WG debug
   integer :: outdbg
+  logical :: verbose
   character (len=20) :: dbg_filename
 
   !-------------------------------------------------------------------
@@ -82,7 +83,7 @@ program tdlda
   !
   if(peinf%master) write (*,*) " Call input_g"
   call input_g(pol_in,qpt,tdldacut,nbuff,lcache,w_grp%npes,&
-       nolda,tamm_d,r_grp%num,dft_code,doisdf,n_intp,intp_type,.false.)
+       nolda,tamm_d,r_grp%num,dft_code,doisdf,n_intp,intp_type,isdf_type,.false.)
   if(peinf%master) write (*,*) " input_g done"
   call input_t(tamm_d,rpaonly,trip_flag,noxchange,trunc_c)
   
@@ -197,38 +198,58 @@ program tdlda
      ! ISDF will deal with all the pair products of wave functions as defined in
      ! pol_in(isp)%vmap(:) and pol_in(isp)%cmap(:)
      allocate(ncv(nspin))
-     ncv(1:nspin) = 0 ! Initialization
+     allocate(nv(nspin))
+     allocate(nc(nspin))
+     ncv(1:nspin) = 0 ! Initializing with zeros
+     nc(1:nspin)  = 0 
+     nv(1:nspin)  = 0
      do isp = 1, nspin
+        write(6, '(A,i3)') " Spin ", isp
+        nv(isp) = pol_in(isp)%nval  ! number of valence states in TDLDA calculation
+        write(6, *) " Nv=", nv(isp)
+        nc(isp) = pol_in(isp)%ncond ! number of conduction states in TDLDA calculation
+        write(6, *) " Nc=", nc(isp)
         ncv(isp) = pol_in(isp)%nval * pol_in(isp)%ncond
+        write(6, *) " Ncv=Nc*Nv=", ncv(isp)
      enddo
-     
-     if (nspin == 2) maxncv = max(ncv(1), ncv(2))
-     if (nspin == 1) maxncv = ncv(1)
-     write(6, *) "ncv", ncv(:), " maxncv", maxncv
+     maxncv = maxval(ncv(1:nspin))
+     maxnc  = maxval(nc(1:nspin))
+     maxnv  = maxval(nv(1:nspin))
+     write (6,*) " max Ncv", maxncv, " max Nv", maxnv, " max Nc", maxnc
      maxv = 0 ! the absolute index of the highest occupied state
-     maxc = 0 ! the absolute index of the highest occupied state
+     maxc = 0 ! the absolute index of the highest unoccupied state
      do isp = 1, nspin
         maxv = max( maxval(pol_in(isp)%vmap(:)), maxv)
         maxc = max( maxval(pol_in(isp)%cmap(:)), maxc)
      enddo
      allocate(pairmap(maxv, maxc, nspin, kpt%nk))
      allocate(invpairmap(2, maxncv, nspin, kpt%nk))
+     allocate(ivlist(maxnv, nspin))
+     allocate(iclist(maxnc, nspin))
      pairmap = 0     ! Initialization
      invpairmap = 0  ! Initialization
+     ivlist = 0 
+     iclist = 0
      do isp = 1, nspin
+        do iv = 1, pol_in(isp)%nval
+           ivlist(iv,isp) = pol_in(isp)%vmap(iv)
+        enddo
+        do ic = 1, pol_in(isp)%ncond
+           iclist(ic,isp) = pol_in(isp)%cmap(ic)
+        enddo
         do ikp = 1, kpt%nk
            icv = 0
            do iv = 1, pol_in(isp)%nval
               do ic = 1, pol_in(isp)%ncond
-                  icv = icv + 1
-                  ivv = pol_in(isp)%vmap(iv)
-                  icc = pol_in(isp)%cmap(ic)
-                  ! pairmap maps the real valence and conduction band index to 
-                  ! the |vc> pair index obtained in isdf.f90 
-                  pairmap(ivv,icc,isp,ikp) = icv  
-                  ! invpairmap maps the 
-                  invpairmap(1,icv,isp,ikp) = ivv
-                  invpairmap(2,icv,isp,ikp) = icc
+                 icv = icv + 1
+                 ivv = pol_in(isp)%vmap(iv)
+                 icc = pol_in(isp)%cmap(ic)
+                 ! pairmap maps the real valence and conduction band index to 
+                 ! the |vc> pair index obtained in isdf.f90 
+                 pairmap(ivv,icc,isp,ikp) = icv  
+                 ! invpairmap maps the 
+                 invpairmap(1,icv,isp,ikp) = ivv
+                 invpairmap(2,icv,isp,ikp) = icc
               enddo
            enddo
         enddo
@@ -279,8 +300,19 @@ program tdlda
      ! Cmtrx is intialized to zero in isdf_parallel.f90
      allocate(Mmtrx(n_intp, n_intp, nspin, nspin, kpt%nk, 2)) 
      ! Mmtrx is intialized to zero in isdf_parallel.f90
-     call isdf_parallel(gvec, pol_in, kpt, n_intp, intp, nspin, ncv, maxncv, &
-       invpairmap, kflag, Cmtrx, Mmtrx, .TRUE.)
+     verbose = .FALSE.
+     if(isdf_type == 1 ) then
+       write(6,*) " Call isdf_parallel()"
+       call isdf_parallel(gvec, pol_in, kpt, n_intp, intp, &
+         nspin, ncv, maxncv, &
+         invpairmap, kflag, Cmtrx, Mmtrx, verbose)
+     else
+       write(6,*) " Call isdf_parallel2()"
+       call isdf_parallel2(gvec, pol_in, kpt, n_intp, intp, &
+         nspin, ncv, maxncv, &
+         invpairmap, nv, maxnv, ivlist, nc, maxnc, iclist, &
+         kflag, Cmtrx, Mmtrx, verbose)
+     endif
      if(peinf%master) write(*,*) 'done isdf'
      call stopwatch(peinf%master, "after call isdf")
   endif
@@ -378,6 +410,10 @@ program tdlda
   if(doisdf) then
     deallocate(pairmap)
     deallocate(invpairmap)
+    deallocate(ivlist)
+    deallocate(iclist)
+    deallocate(nv)
+    deallocate(nc)
     deallocate(Cmtrx)
     deallocate(Mmtrx)
     deallocate(ncv)

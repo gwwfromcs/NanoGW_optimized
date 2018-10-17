@@ -11,7 +11,7 @@
 !
 !-------------------------------------------------------------------
 subroutine input_g(pol_in,qpt,tdldacut,nbuff,lcache,wgr_npes, &
-      nolda,tamm_d,rgr_num,dft_code,doisdf,n_intp,intp_type,verbose)
+      nolda,tamm_d,rgr_num,dft_code,doisdf,n_intp,intp_type,isdf_type,verbose)
 
   use typedefs
   use esdf
@@ -46,7 +46,7 @@ subroutine input_g(pol_in,qpt,tdldacut,nbuff,lcache,wgr_npes, &
   ! variables for ISDF method
   logical, intent(out) :: doisdf
   integer, intent(out) :: n_intp
-  integer, intent(out) :: intp_type
+  integer, intent(out) :: intp_type, isdf_type
 
   !-----------------------------------------------------------------------
   ! Initialize input info.
@@ -82,6 +82,8 @@ subroutine input_g(pol_in,qpt,tdldacut,nbuff,lcache,wgr_npes, &
   n_intp = esdf_integer('num_isdf_points',-1)
 
   intp_type = esdf_integer('intp_type',1)
+
+  isdf_type = esdf_integer('isdf_type',1)
   ! ------
 
   ii = 1
