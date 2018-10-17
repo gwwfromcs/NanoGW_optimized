@@ -451,6 +451,8 @@ subroutine isdf_parallel(gvec, pol_in, kpt, n_intp, intp, &
         ALLOCATE( fxc( ngfl, nspin, nspin ), stat = errinfo )
         ALLOCATE( fzeta(ngfl, nspin), stat = errinfo )
         fxc_loc = zero
+        ! 
+        ! Copy the charge density to fxc_loc
         do isp = 1, nspin
            call dcopy( w_grp%mydim, kpt%rho(w_grp%offset+1, isp), 1, &
               fxc_loc(1, isp, 1), 1 )
@@ -461,6 +463,7 @@ subroutine isdf_parallel(gvec, pol_in, kpt, n_intp, intp, &
         call xc_end( xc_lda )
         !
         igrid = 0
+        ! Unfold fxc_loc (stored in irreducible domain) with available symm ops.
         do ipt = 1, w_grp%mydim
           do itrans = 1, gvec%syms%ntrans
             igrid = igrid + 1

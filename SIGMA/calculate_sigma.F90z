@@ -417,13 +417,16 @@ subroutine Zcalculate_sigma(nspin,nkpt,n_it,it_scf,nr_buff,static_type, &
         !-------------------------------------------------------------------
         ! Sort quasiparticle orbitals according to representation.
         !
-        allocate(iord(kpt%wfn(isp,jk)%nstate))
+        allocate(iord(sig(isp,ik)%nmap))
         iord = 0
         do irp = 1, gvec%syms%ntrans
            jj = 0
-           do ii = 1, kpt%wfn(isp,jk)%nstate
-              if (kpt%wfn(isp,jk)%map(ii) /= 0 .and. &
-                   irp == kpt%wfn(isp,jk)%irep(ii)) jj = jj + 1
+           do isig = 1, sig(isp,ik)%nmap
+              ii = sig(isp,ik)%map(isig)
+              if (kpt%wfn(isp,jk)%irep(ii) == irp) then
+                 jj = jj + 1
+                 iord(isig) = jj
+              endif
            enddo
            neig_qp = jj
            q_p(irp,isp,ik)%neig = neig_qp
@@ -440,17 +443,16 @@ subroutine Zcalculate_sigma(nspin,nkpt,n_it,it_scf,nr_buff,static_type, &
               q_p(irp,isp,ik)%eqp = zero
               allocate(q_p(irp,isp,ik)%vqp(neig_qp,neig_qp))
               q_p(irp,isp,ik)%vqp = zzero
+              jj = 0
+              do isig = 1, sig(isp,ik)%nmap
+                 ii = sig(isp,ik)%map(isig)
+                 if (kpt%wfn(isp,jk)%irep(ii) == irp) then
+                    jj = jj + 1
+                    q_p(irp,isp,ik)%jrep(jj) = ii
+                    q_p(irp,isp,ik)%hqp(jj,jj) = zone*kpt%wfn(isp,jk)%e1(ii)*ryd
+                 endif
+              enddo
            endif
-           jj = 0
-           do ii = 1, kpt%wfn(isp,jk)%nstate
-              if (kpt%wfn(isp,jk)%map(ii) /= 0 .and. &
-                   irp == kpt%wfn(isp,jk)%irep(ii)) then
-                 jj = jj + 1
-                 q_p(irp,isp,ik)%jrep(jj) = kpt%wfn(isp,jk)%map(ii)
-                 iord(ii) = jj
-                 q_p(irp,isp,ik)%hqp(jj,jj) = zone*kpt%wfn(isp,jk)%e0(ii)*ryd
-              endif
-           enddo
         enddo
         !-------------------------------------------------------------------
         ! Print self-energy corrections.
@@ -610,7 +612,7 @@ subroutine Zcalculate_sigma(nspin,nkpt,n_it,it_scf,nr_buff,static_type, &
   !
   call Zetotal(gvec,kpt,nspin)
 
-  if (writeqp .and. sig_in%xc == XC_GW .and. dft_code == PARSEC ) &
+  if (writeqp .and. sig_in%xc == XC_GW .and. dft_code == PARSEC) &
        call Zprint_qp(nspin,gvec%syms%ntrans,66,77,gvec,kpt)
   !
   ! Prepare for the next iteration.

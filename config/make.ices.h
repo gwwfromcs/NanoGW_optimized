@@ -5,7 +5,7 @@
 # This file is part of RGWBS. It is distributed under the GPL v1.
 #
 FCPP    = /usr/bin/cpp -P -traditional-cpp
-CPPOPT  = -DUSEFFTW3 -DMPI # -DDEBUG
+CPPOPT  = -DUSEFFTW3 -DMPI -DDEBUG
 
 EXT     = .mpi
 

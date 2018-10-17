@@ -638,7 +638,7 @@ subroutine parsec_wfn(gvec,kpt,nmap,nspin,wmap,init_gr)
         enddo
 
         ! W Gao dbg
-        if(peinf%master .and. .false.) then
+        if(peinf%master .and. .true.) then
           write(*,'("isp = ",i2," ikp = ",i4)') isp, ikp
           write(*,'("    i   wfn%map(ii) ")')
           do ii = 1, kpt%wfn(isp,ikp)%nstate

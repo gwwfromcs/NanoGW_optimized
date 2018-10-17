@@ -66,9 +66,9 @@ program sigma
   character (len=20), allocatable :: routnam(:)
 
   logical :: nolda, tamm_d, snorm, writeqp, readvxc, &
-       readocc, cohsex, init_gr, hqp_sym, lstop
+       readocc, cohsex, nooffd, init_gr, hqp_sym, lstop
   integer :: ii, irp, iq, ik, nmap, nspin, nbuff, lcache, isp, it_scf, &
-       chkpt_in, n_it, nr_buff, sig_en, nkpt, dft_code, static_type
+       chkpt_in, n_it, nr_buff, static_type, sig_en, nkpt, dft_code
   real(dp) :: tsec(2), mem1, mem2, mem3, xsum, xmax, rtmp, tdldacut, &
         max_sig, max_conv, xbuff, ecuts, qpmix, sig_cut
   logical, allocatable :: wmap(:)
@@ -108,7 +108,7 @@ program sigma
        nolda,tamm_d,r_grp%num,dft_code,doisdf,n_intp,intp_type,.false.)
   call MPI_BARRIER(peinf%comm,info)
   call input_s(sig_in,kpt_sig,snorm,writeqp,readvxc,readocc,cohsex, &
-       hqp_sym,n_it,chkpt_in,static_type,sig_en,max_conv,xbuff,ecuts, &
+       nooffd,hqp_sym,n_it,chkpt_in,static_type,sig_en,max_conv,xbuff,ecuts, &
        qpmix,sig_cut,.false.)
   call MPI_BARRIER(peinf%comm,info)
 
@@ -543,7 +543,7 @@ program sigma
           ' Mixing input and output (QP) wavefunctions.', &
           ' Mixing parameter = ', qpmix
      if (sig_cut > zero) write(6,'(a,f20.10,a,/)') &
-          ' Aplying cut-off ', sig_cut, ' eV to self-energy.'
+          ' Applying cut-off ', sig_cut, ' eV to self-energy.'
      if (writeqp) write(6,'(a,/)') 'Printing out new wavefunctions.'
      if (n_it > 0) write(6,'(a,i5,a,/,a,f10.5,a,/)') &
           ' Performing ', n_it, ' SCGW iterations.', &

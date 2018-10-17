@@ -54,6 +54,7 @@ subroutine Zcontract_en(nn,nen,eni,esign,ecut,ecut2,occfac,eig,pot_r,pot_l,sum0)
   call Zcopy(nn,pot_l,1,pot_prod,1)
   pot_prod = MYCONJG(pot_prod)
   call Zmultiply_vec(nn,pot_r,pot_prod)
+  ! pot_prod = zoccfac*pot_l(1:nn)*pot_r(1:nn)
   call Zscal(nn,zoccfac,pot_prod,1)
   do jj = 1, nn
      edenr = Zone*( eni + eig(jj) )
@@ -62,6 +63,8 @@ subroutine Zcontract_en(nn,nen,eni,esign,ecut,ecut2,occfac,eig,pot_r,pot_l,sum0)
         edeni(ien) = ecutsgn/edenr(ien)
         edenr(ien) = (eni(ien) + eig(jj))/edenr(ien)
      enddo
+     ! sum0(1,1:nen) = sum0(1,1:nen) + pot_prod(jj)*edenr(1:nen)
+     ! sum0(2,1:nen) = sum0(2,1:nen) + pot_prod(jj)*edenr(1:nen)
      call Zaxpy(nen,pot_prod(jj),edenr,1,sum0(1,1),2)
      call Zaxpy(nen,pot_prod(jj),edeni,1,sum0(2,1),2)
   enddo

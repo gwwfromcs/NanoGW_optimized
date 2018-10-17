@@ -292,6 +292,30 @@ module esdf_key
   data kw_typ(62)     / 'I:E' /
   data kw_dscrpt(62)  / '*! Maximum orbital to be writen in BLIP file !*' /
 
+  data kw_label(63)   / 'static_type' /
+  data kw_typ(63)     / 'I:E' /
+  data kw_dscrpt(63)  / '*! Type of static correction for correlation self energy !*' /
+
+  data kw_label(65)   / 'only_diagonal' /
+  data kw_typ(65)     / 'E:E' /
+  data kw_dscrpt(65)  / '*! Calculate only diagonal of SIGMA matrix (no off-diagonal) !*' /
+
+  data kw_label(66)   / 'qp_min' /
+  data kw_typ(66)     / 'I:E' /
+  data kw_dscrpt(66)  / '*! Lowest index quasiparticle in SIGMA matrix !*' /
+
+  data kw_label(67)   / 'qp_max' /
+  data kw_typ(67)     / 'I:E' /
+  data kw_dscrpt(67)  / '*! Highest index quasiparticle in SIGMA matrix !*' /
+
+  data kw_label(68)   / 'qp_estimate' /
+  data kw_typ(68)     / 'B:E' /
+  data kw_dscrpt(68)  / '*! Estimated qp energy !*' /
+
+  data kw_label(69)   / 'read_im_sigma' /
+  data kw_typ(69)     / 'E:E' /
+  data kw_dscrpt(69)  / '*! Read imaginary part of sigma from sigma_mtxel.dat !*' /
+
   data kw_label(201)    / 'periodic_system' /
   data kw_typ(201)      / 'L:B' /
   data kw_dscrpt(201)   / '*!System type (confined or periodic)!*'/
@@ -382,10 +406,6 @@ module esdf_key
   data kw_label(408)   / 'intp_type'/
   data kw_typ(408)     / 'I:E' /
   data kw_dscrpt(408)  / '*! 1 cvt method using charge density as weight; 2 cvt method using the modular square of all wavefunctions as weight  *!' /
-
-  data kw_label(409)   / 'static_type' /
-  data kw_typ(409)     / 'I:E' /
-  data kw_dscrpt(409)  / '*! Type of static correction for correlation self energy !*' /
 
 end module esdf_key
 !===============================================================

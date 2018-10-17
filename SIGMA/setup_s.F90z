@@ -42,7 +42,7 @@ subroutine Zsetup_s(gvec,kpt,qpt,kpt_sig,sig_in,sig,pol_in,pol,k_p,k_c, &
 
   ! local variables
   integer :: ii, jj, nn, isp, ik, ikp, iq, jk, info, &
-       n_c, n_c_up, n_p, n_p_up, nvxc(2), nmax
+       n_c, n_c_up, n_p, n_p_up, nvxc(2), nmax, nhomo
   real(dp) :: tmp, ktmp(3)
   logical, dimension(:,:), allocatable :: lmap
   integer, dimension(:,:), allocatable :: map_c
@@ -117,7 +117,7 @@ subroutine Zsetup_s(gvec,kpt,qpt,kpt_sig,sig_in,sig,pol_in,pol,k_p,k_c, &
   ! If no matrix elements are defined, calculate all of them.
   ! Assume that occupied and unoccupied orbitals can be mixed.
   !
-  if (sig_in%nmap < 0) then
+  if (sig_in%nmap < 0) then ! sig_in%nmap: total number of states for which self-energy is computed
      sig_in%nmap = maxval(kpt%wfn(1,1)%mapd(:,:))
      allocate(sig_in%map(sig_in%nmap))
      do ii = 1, maxval(kpt%wfn(1,1)%mapd(:,:))
@@ -131,9 +131,9 @@ subroutine Zsetup_s(gvec,kpt,qpt,kpt_sig,sig_in,sig,pol_in,pol,k_p,k_c, &
            sig_in%diag(ii) = ii
         enddo
      endif
-     if (sig_in%noffd_s <= 0) then
+     nn = 0
+     if (sig_in%noffd_s < 0) then
         allocate(map_c( maxval(kpt%wfn(1,1)%mapd(:,:))**2 ,2))
-        nn = 0
         nvxc(1) = minval(kpt%wfn(1,1)%mapd(:,:))
         nvxc(2) = maxval(kpt%wfn(1,1)%mapd(:,:))
         do ii = nvxc(1), nvxc(2)
@@ -166,21 +166,20 @@ subroutine Zsetup_s(gvec,kpt,qpt,kpt_sig,sig_in,sig,pol_in,pol,k_p,k_c, &
         sig(isp,ik)%nmap = sig_in%nmap
         allocate(sig(isp,ik)%map(sig(isp,ik)%nmap))
         sig(isp,ik)%map = sig_in%map
-        if (sig_in%ndiag_s > 0) then
-           sig(isp,ik)%ndiag_s = sig_in%ndiag_s
-           sig(isp,ik)%ndiag = sig_in%ndiag
+        sig(isp,ik)%ndiag = sig_in%ndiag
+        sig(isp,ik)%ndiag_s = sig_in%ndiag_s
+        if (sig(isp,ik)%ndiag_s > 0) then
            allocate(sig(isp,ik)%diag(sig(isp,ik)%ndiag_s))
            sig(isp,ik)%diag = sig_in%diag
         endif
-        if (sig_in%noffd_s > 0) then
-           sig(isp,ik)%noffd_s = sig_in%noffd_s
-           sig(isp,ik)%noffd = sig_in%noffd
+        sig(isp,ik)%noffd = sig_in%noffd
+        sig(isp,ik)%noffd_s = sig_in%noffd_s
+        if (sig(isp,ik)%noffd_s > 0) then
            allocate(sig(isp,ik)%off1(sig(isp,ik)%noffd_s))
            sig(isp,ik)%off1 = sig_in%off1
            allocate(sig(isp,ik)%off2(sig(isp,ik)%noffd_s))
            sig(isp,ik)%off2 = sig_in%off2
         endif
-        sig(isp,ik)%ndiag = sig_in%ndiag
      enddo
   enddo
 
@@ -216,9 +215,15 @@ subroutine Zsetup_s(gvec,kpt,qpt,kpt_sig,sig_in,sig,pol_in,pol,k_p,k_c, &
            n_c = 0
            do ik = 1, kpt_sig%nk
               do isp = 1, nspin
-                 if (nmax == 0) nmax = maxval(kpt%wfn(isp,ik)%mapd(2,:))
+                 if (nmax == 0) nmax = maxval(kpt%wfn(isp,ik)%mapd(:,:))
+                 ! Assume HOMO always included in valence states for transition
+                 nhomo = maxval(pol_in(isp)%vmap(:))
                  do jj = 1, sig(isp,ik)%nmap
-                    if (lmap(jj,isp)) n_c = n_c + nmax
+                    if (lmap(jj,isp)) then
+                      n_c = n_c + nmax  ! GW
+                    else
+                      n_c = n_c + nhomo ! COHSEX
+                    endif
                  enddo
               enddo
            enddo
@@ -228,15 +233,25 @@ subroutine Zsetup_s(gvec,kpt,qpt,kpt_sig,sig_in,sig,pol_in,pol,k_p,k_c, &
               do isp = 1, nspin
                  jk = sig(isp,ik)%indxk
                  ikp = qpt%match(jk,iq)
-                 do jj = 1, sig(isp,ik)%nmap
+                 do jj = 1, sig(isp,ik)%nmap ! GW, sum up to nmax
                     if (.not. lmap(jj,isp)) cycle
                     do ii = 1, nmax
-                       n_c = n_c + 1
-                       map_c(1,n_c) = sig(isp,ik)%map(jj)
-                       map_c(2,n_c) = ii
-                       map_c(3,n_c) = jk
-                       map_c(4,n_c) = ikp
+                       map_c(1,n_c+ii) = sig(isp,ik)%map(jj)
+                       map_c(2,n_c+ii) = ii
+                       map_c(3,n_c+ii) = jk
+                       map_c(4,n_c+ii) = ikp
                     enddo
+                    n_c = n_c + nmax
+                 enddo
+                 do jj = 1, sig(isp,ik)%nmap ! COHSEX, sum over occupied states
+                    if (lmap(jj,isp)) cycle
+                    do ii = 1, nhomo
+                       map_c(1,n_c+ii) = sig(isp,ik)%map(jj)
+                       map_c(2,n_c+ii) = ii
+                       map_c(3,n_c+ii) = jk
+                       map_c(4,n_c+ii) = ikp
+                    enddo
+                    n_c = n_c + nhomo
                  enddo
                  if ( isp == 1 ) n_c_up = n_c
               enddo

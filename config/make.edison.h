@@ -5,7 +5,7 @@
 # This file is part of RGWBS. It is distributed under the GPL v1.
 #
 FCPP    = /usr/bin/cpp -P -traditional-cpp
-CPPOPT  = -DUSEFFTW3 -DMPI #-DDEBUG
+CPPOPT  = -DUSEFFTW2 -DMPI -DDEBUG
 
 EXT     = .mpi.edison
 
@@ -16,7 +16,7 @@ F90     = $(F90s)
 OPTS    = -no-ipo 
 
 FFTW_DIR = 
-LIBFFT  = -I$(FFTW_INC) -L$(FFTW_DIR) -lfftw3 -lm
+LIBFFT  = -I$(FFTW_INC) -L$(FFTW_DIR) -ldfftw -lm
 
 
 LIBXC = -L/global/homes/w/weiwei/lib/libstring_f -L/global/homes/w/weiwei/lib/libxc/src  -lxc -lstring_f   # -lxcf90

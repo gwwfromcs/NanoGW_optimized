@@ -8,7 +8,7 @@
 !
 !-------------------------------------------------------------------
 subroutine input_s(sig,kpt_sig,snorm,writeqp,readvxc,readocc,cohsex, &
-     hqp_sym,n_it,chkpt,static_type,sig_en, &
+     nooffd, hqp_sym,n_it,chkpt,static_type,sig_en, &
      max_conv,xbuff,ecuts,qpmix,sig_cut,verbose)
 
   use typedefs
@@ -27,6 +27,7 @@ subroutine input_s(sig,kpt_sig,snorm,writeqp,readvxc,readocc,cohsex, &
        readvxc, &    ! true if Vxc matrix elements are read from file sigma_mtxel.dat
        readocc, &    ! true if orbital occupancies should be read
        cohsex, &     ! true if COHSEX (=static) approximation is used
+       nooffd, &     ! true if only diagonal of self energy matrix to be computed
        hqp_sym       ! true if H_qp is symmetrized
   logical, intent(in)  :: &
        verbose       ! true for printing out extra info
@@ -45,8 +46,9 @@ subroutine input_s(sig,kpt_sig,snorm,writeqp,readvxc,readocc,cohsex, &
   ! local variables
   logical :: ifound
   character (len=800) :: tstring
-  integer :: ii, i1, i2, jj, nlines, nmax_s
+  integer :: ii, i1, i2, jj, nlines, min_s, max_s
   integer :: diag(maxdata), offdiag(maxdata,2)
+  integer, parameter :: MIN_INIT = 88888888
   real(dp) :: dtmp
   logical, dimension(:,:), allocatable :: inv_offd
 
@@ -66,7 +68,8 @@ subroutine input_s(sig,kpt_sig,snorm,writeqp,readvxc,readocc,cohsex, &
 
   sig%nmax_c = esdf_integer('max_number_states',-1)
 
-  nmax_s = esdf_integer('max_number_states_cohsex',-1)
+  min_s = esdf_integer('qp_min',MIN_INIT)
+  max_s = esdf_integer('qp_max',-1)
 
   sig%deltae = esdf_physical('energy_range',20.d0,'eV')
   sig%deltae = sig%deltae / ryd
@@ -92,6 +95,8 @@ subroutine input_s(sig,kpt_sig,snorm,writeqp,readvxc,readocc,cohsex, &
 
   cohsex = esdf_defined('cohsex_approximation')
 
+  nooffd = esdf_defined('only_diagonal')
+
   tstring = esdf_reduce(esdf_string('exchange_correlation','gw'))
   select case (trim(tstring))
   case ('gw')
@@ -115,7 +120,7 @@ subroutine input_s(sig,kpt_sig,snorm,writeqp,readvxc,readocc,cohsex, &
 
   xbuff = esdf_physical('scratch_disk_size',zero,'MB')
 
-  ecuts = esdf_physical('dynamic_energy_resolution',0.1d0,'Ry')
+  ecuts = esdf_physical('dynamic_energy_resolution',0.005d0,'Ry')
 
   qpmix = esdf_double('qp_mixing_param',one)
 
@@ -166,53 +171,70 @@ subroutine input_s(sig,kpt_sig,snorm,writeqp,readvxc,readocc,cohsex, &
      call esdf_parse_block_2('offdiag',nlines,sig%noffd,maxdata,offdiag)
   endif
 
-  if (nmax_s == -1) nmax_s = max(nmax_s,maxval(diag(1:sig%ndiag)), &
-       maxval(offdiag(1:sig%noffd,:)))
-
   call esdf_close
 
   !-----------------------------------------------------------------------
   ! Check if indices of diagonal/off-diagonal matrix elements of sigma
   ! are defined.
   !
-  if (nmax_s > maxdata) call die('ERROR: Too many matrix elements '// &
+
+  if (nooffd) then
+     offdiag = -1
+     sig%noffd = 0
+  endif
+
+  if (sig%ndiag > 0) min_s = min(min_s,minval(diag(1:sig%ndiag)))
+  if (sig%noffd > 0) min_s = min(min_s,minval(offdiag(1:sig%noffd,:)))
+  if (sig%ndiag > 0) max_s = max(max_s,maxval(diag(1:sig%ndiag)))
+  if (sig%noffd > 0) max_s = max(max_s,maxval(offdiag(1:sig%noffd,:)))
+
+  if (min_s == MIN_INIT) min_s = 1
+
+  if (max_s > maxdata) call die('ERROR: Too many matrix elements '// &
        'Increase value of internal parameter maxdata in typedefs.F90.')
-  if (nmax_s > 0) then
-     sig%nmap = max(nmax_s,maxval(diag(1:sig%ndiag)), &
-          maxval(offdiag(1:sig%noffd,:)))
+  if (max_s > 0) then
+     sig%nmap = max_s - min_s + 1
      allocate(sig%map(sig%nmap))
      do ii = 1, sig%nmap
-        sig%map(ii) = ii
+        sig%map(ii) = ii + min_s - 1
      enddo
 
      sig%ndiag_s = max(sig%ndiag,0)
-     do ii = 1, nmax_s
+     do ii = min_s, max_s
         ifound = .false.
-        do jj = 1, sig%ndiag_s
-           if (diag(jj) == ii) ifound = .true.
+        do jj = 1, sig%ndiag
+           if (diag(jj) == ii) then
+              ifound = .true.
+              exit
+           endif
         enddo
         if (.not. ifound) then
            sig%ndiag_s = sig%ndiag_s + 1
            diag(sig%ndiag_s) = ii
         endif
      enddo
-     sig%noffd_s = max(sig%noffd,0)
-     allocate(inv_offd(nmax_s,nmax_s))
-     inv_offd = .true.
-     do jj = 1, sig%noffd
-        inv_offd(offdiag(jj,1),offdiag(jj,2)) = .false.
-        inv_offd(offdiag(jj,2),offdiag(jj,1)) = .false.
-     enddo
-     do i1 = 1, nmax_s
-        do i2 = i1 + 1, nmax_s
-           if (inv_offd(i1,i2)) then
-              sig%noffd_s = sig%noffd_s + 1
-              offdiag(sig%noffd_s,1) = i1
-              offdiag(sig%noffd_s,2) = i2
-           endif
+
+     if (nooffd) then
+        sig%noffd_s = 0
+     else
+        sig%noffd_s = max(sig%noffd,0)
+        allocate(inv_offd(min_s:max_s,min_s:max_s))
+        inv_offd = .true.
+        do jj = 1, sig%noffd
+           inv_offd(offdiag(jj,1),offdiag(jj,2)) = .false.
+           inv_offd(offdiag(jj,2),offdiag(jj,1)) = .false.
         enddo
-     enddo
-     deallocate(inv_offd)
+        do i1 = min_s, max_s
+           do i2 = i1 + 1, max_s
+              if (inv_offd(i1,i2)) then
+                 sig%noffd_s = sig%noffd_s + 1
+                 offdiag(sig%noffd_s,1) = i1
+                 offdiag(sig%noffd_s,2) = i2
+              endif
+           enddo
+        enddo
+        deallocate(inv_offd)
+     endif
   endif
 
   if(sig%ndiag_s > 0) then
@@ -243,7 +265,6 @@ subroutine input_s(sig,kpt_sig,snorm,writeqp,readvxc,readocc,cohsex, &
      enddo
   endif
 
-  ! Weiwei Gao: for debug 
   if(peinf%master .and. verbose) then
      write(6,'(" in input_s() ")')
      write(6,'("    ii    sig%map")')

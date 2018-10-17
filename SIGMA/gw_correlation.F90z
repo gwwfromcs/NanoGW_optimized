@@ -106,7 +106,7 @@ subroutine Zgw_correlation(gvec,kpt,qpt,k_c,pol,sig_in,sig,nspin,nkpt,irp, &
         icol = pcol + r_grp%inode*pol%nn
         if (icol > pol%ntr) cycle
         do irow = 1, k_c%ncol
-           write(jtape,'(7i4,2e20.10)') irp, irow, icol, k_c%col(:,icol), &
+           write(jtape,'(7i8,2e20.10)') irp, irow, icol, k_c%col(:,icol), &
 #ifdef CPLX
                 real(pot_c(pcol,irow),dp), aimag(pot_c(pcol,irow))
 #else
@@ -160,7 +160,7 @@ subroutine Zgw_correlation(gvec,kpt,qpt,k_c,pol,sig_in,sig,nspin,nkpt,irp, &
            icol = pcol + r_grp%inode*pol%nn
            if (icol > pol%ntr) cycle
            do irow = 1, k_c%ncol
-              write(jtape,'(7i4,2e20.10)') irp, irow, icol, k_c%col(:,icol), &
+              write(jtape,'(7i8,2e20.10)') irp, irow, icol, k_c%col(:,icol), &
 #ifdef CPLX
                    real(pot_c(pcol,irow),dp), aimag(pot_c(pcol,irow))
 #else

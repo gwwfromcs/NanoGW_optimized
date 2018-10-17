@@ -186,7 +186,8 @@ subroutine Zkernel(gvec,kpt,k_mat,irp,kflag,nspin,qkt_in,distrib,readflag,&
   ! Allocate scratch space.
   !
   nbuff_max = k_mat%nrow / r_grp%npes + 1 + nspin*nspin
-  nbuff_max = max(nbuff_max,nbuff_max * k_mat%ncol / nbuff + 1) + 5 ! W. Gao: don't understand ??
+  ! W. Gao: don't understand the following ??
+  nbuff_max = max(nbuff_max,nbuff_max * k_mat%ncol / nbuff + 1) + 5
   allocate(k_tmp(nbuff_max))
   k_tmp(:)%nblock = -1
   k_tmp(:)%nblock_max = nbuff
@@ -197,7 +198,7 @@ subroutine Zkernel(gvec,kpt,k_mat,irp,kflag,nspin,qkt_in,distrib,readflag,&
 
   !-------------------------------------------------------------------
   ! Calculate all necessary matrix elements.
-  
+  !
   if(k_mat%isdf) then
     write(*,*) "call k_integrate_isdf"
     call Zk_integrate_isdf(gvec,kpt,k_mat,k_tmp,irp,kflag,nspin,nbuff_max,qkt_in,&
@@ -213,14 +214,14 @@ subroutine Zkernel(gvec,kpt,k_mat,irp,kflag,nspin,qkt_in,distrib,readflag,&
      iswitch = .true.
      nn = k_mat%nrow
      allocate(quadr(4,nn))
-     quadr(1,:) = k_mat%row(2,:)
-     quadr(2,:) = k_mat%row(1,:)
-     quadr(3,:) = k_mat%row(4,:)
-     quadr(4,:) = k_mat%row(3,:)
+     quadr = k_mat%row
      deallocate(k_mat%row)
      k_mat%nrow = k_mat%ncol
      allocate(k_mat%row(4,k_mat%nrow))
-     k_mat%row = k_mat%col
+     k_mat%row(1,:) = k_mat%col(2,:)
+     k_mat%row(2,:) = k_mat%col(1,:)
+     k_mat%row(3,:) = k_mat%col(4,:)
+     k_mat%row(4,:) = k_mat%col(3,:)
      deallocate(k_mat%col)
      k_mat%ncol = nn
      allocate(k_mat%col(4,k_mat%ncol))
@@ -254,14 +255,16 @@ subroutine Zkernel(gvec,kpt,k_mat,irp,kflag,nspin,qkt_in,distrib,readflag,&
      if ( icol > k_mat%ncol ) exit
      csp = 1
      if ( icol > k_mat%ncol_up ) csp = 2
-     imapc(k_mat%col(1,icol),k_mat%col(2,icol),k_mat%col(3,icol),k_mat%col(4,icol),csp) = icol - ioffc
+     imapc(k_mat%col(1,icol),k_mat%col(2,icol),k_mat%col(3,icol), &
+           k_mat%col(4,icol),csp) = icol - ioffc
   enddo
   imapr = 0
   do irow = ioffr + 1, ioffr + nrow
      if ( irow > k_mat%nrow ) exit
      rsp = 1
      if ( irow > k_mat%nrow_up ) rsp = 2
-     imapr(k_mat%row(1,irow),k_mat%row(2,irow),k_mat%row(3,irow),k_mat%row(4,irow),rsp) = irow - ioffr
+     imapr(k_mat%row(1,irow),k_mat%row(2,irow),k_mat%row(3,irow), &
+           k_mat%row(4,irow),rsp) = irow - ioffr
   enddo
 
   allocate(nblock(nbuff_max))

@@ -177,8 +177,8 @@ module typedefs
      integer :: lcache
      ! distributed interaction kernel (local array)
      ! K_ij^mn = < i j | K | m n> = m(u,v) where
-     !   row(u,1) = i   row(u,2) = j  , 1 <= u <= ncol
-     !   col(v,1) = m   col(v,2) = n  , 1 <= v <= nrow
+     !   row(u,1)=i   row(u,2)=j  row(u,3)=k_i  row(u,4)=k_j, 1 <= u <= ncol
+     !   col(v,1)=m   col(v,2)=n  col(v,3)=k_m  col(v,4)=k_n, 1 <= v <= nrow
      real(dp), pointer :: dm(:,:)
      complex(dpc), pointer :: zm(:,:)
   end type kernelinfo

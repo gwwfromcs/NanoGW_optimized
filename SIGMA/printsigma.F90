@@ -38,7 +38,7 @@ subroutine printsigma(nrep,sig_in,sig,wfn,q_p,itape,isp,ik, &
   ! quasi-particle data for the current k-point, all representations
   type (qpinfo), dimension(nrep), intent(inout) :: q_p
   ! list of electron orbitals ordered according to representation
-  integer, intent(in) :: iord(wfn%nstate)
+  integer, intent(in) :: iord(sig%nmap)
   ! mixing parameter
   real(dp), intent(in) :: qpmix
   ! maximum amplitude of self-energy correction, in eV. The self-energy
@@ -148,15 +148,14 @@ subroutine printsigma(nrep,sig_in,sig,wfn,q_p,itape,isp,ik, &
   !
   do isig = 1,sig%ndiag_s
      ii = sig%map(sig%diag(isig))
-     jj = iord(ii)
+     jj = iord(sig%diag(isig))
      irp = wfn%irep(ii)
-     q_p(irp)%hqp(jj,jj) = wfn%e0(ii)*ryd + qpmix * (eqp(isig) - wfn%e0(ii)*ryd)
+     q_p(irp)%hqp(jj,jj) = wfn%e1(ii)*ryd + qpmix * (eqp(isig) - wfn%e1(ii)*ryd)
      q_p(irp)%sigmaqp(jj,jj) = eqp(isig) - wfn%e0(ii)*ryd + sig%vxcdiag(isig)
   enddo
   do isig = 1,sig%ndiag
-     ii = sig%map(sig%diag(isig))
-     jj = iord(ii)
-     irp = wfn%irep(ii)
+     jj = iord(sig%diag(isig))
+     irp = wfn%irep(sig%map(sig%diag(isig)))
      q_p(irp)%sigmai(jj) = real(sigmai(isig),dp)
   enddo
 
@@ -176,7 +175,7 @@ subroutine printsigma(nrep,sig_in,sig,wfn,q_p,itape,isp,ik, &
         do isig = 1,sig%ndiag
            en0 =  wfn%e1(sig%map(sig%diag(isig)))*ryd
            edft =  wfn%e0(sig%map(sig%diag(isig)))*ryd
-           write(jtape,'(i6,f8.3,11f10.3)') sig%map(sig%diag(isig)), &
+           write(jtape,'(i6,f8.3,11(1x,f9.3))') sig%map(sig%diag(isig)), &
                 wfn%occ1(sig%map(sig%diag(isig))),edft, &
                 real(sig%vxcdiag(isig),dp), real(sig%xdiag(isig),dp),&
                 real(sexdiag(isig),dp),real(scdiag(isig),dp), &
@@ -249,9 +248,9 @@ subroutine printsigma(nrep,sig_in,sig,wfn,q_p,itape,isp,ik, &
      ! Save off-diagonal part into QP structures.
      do isig = 1, sig%noffd
         i1 = sig%map(sig%off1(isig))
-        j1 = iord(i1)
+        j1 = iord(sig%off1(isig))
         i2 = sig%map(sig%off2(isig))
-        j2 = iord(i2)
+        j2 = iord(sig%off2(isig))
         irp = wfn%irep(i1)
         q_p(irp)%sigmaqp(j1,j2) = sig%xoffd(isig) + &
              sig%scoffd(1,isig) + sig%sgoffd(1,isig)
@@ -265,9 +264,9 @@ subroutine printsigma(nrep,sig_in,sig,wfn,q_p,itape,isp,ik, &
 
      do isig = sig%noffd + 1, sig%noffd_s
         i1 = sig%map(sig%off1(isig))
-        j1 = iord(i1)
+        j1 = iord(sig%off1(isig))
         i2 = sig%map(sig%off2(isig))
-        j2 = iord(i2)
+        j2 = iord(sig%off2(isig))
         irp = wfn%irep(i1)
         q_p(irp)%sigmaqp(j1,j2) = sig%xoffd(isig) + &
              sig%scsoffd(isig) + sig%sgsoffd(isig)
