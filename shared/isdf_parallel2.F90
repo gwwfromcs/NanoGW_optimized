@@ -110,7 +110,8 @@ subroutine isdf_parallel2( gvec, pol_in, kpt, n_intp, intp, &
    ! matrices and vectors used for solving linear equations
    Amtrx(:,:), Bmtrx(:,:), Xmtrx(:,:), tmpmtrx(:,:,:,:), &
    rho_h(:), rho_h_local(:)
-  real(dp) :: diff, weight, qkt(3), vcharac(gvec%syms%ntrans), ccharac(gvec%syms%ntrans)
+  real(dp) :: diff, weight, qkt(3), tsec(2), &
+   vcharac(gvec%syms%ntrans), ccharac(gvec%syms%ntrans)
   integer, allocatable :: inv_ivlist(:,:), inv_iclist(:,:)
   ! counters and temporary integers
   integer :: ipt, ii, jj, iv, ic, icv, & 
@@ -146,6 +147,7 @@ subroutine isdf_parallel2( gvec, pol_in, kpt, n_intp, intp, &
   !
   if ( workrgrp == r_grp%mygr .and. workwgrp == w_grp%mygr ) then
      !
+     call timacc(53,1,tsec)
      if( w_grp%master .and. verbose ) then
         !
         write(*,*) "call isdf_parallel(), write debug info to ", dbg_filename
@@ -397,6 +399,7 @@ subroutine isdf_parallel2( gvec, pol_in, kpt, n_intp, intp, &
         DEALLOCATE( PsiC )
         DEALLOCATE( PsiC_intp )
      enddo ! isp loop
+     call timacc(53,2,tsec)
      !
      ! clean up all the allocated variables
      !
@@ -573,6 +576,7 @@ subroutine isdf_parallel2( gvec, pol_in, kpt, n_intp, intp, &
         !
      endif
      !
+     call timacc(54,1,tsec)
      do ikp = 1, kpt%nk
         !
         do ipair1 = 1, n_intp * nspin
@@ -691,6 +695,7 @@ subroutine isdf_parallel2( gvec, pol_in, kpt, n_intp, intp, &
         enddo ! ipair1
         !
      enddo ! ikp
+     call timacc(54,2,tsec)
      !
      if ( kflag > 0 ) then
        DEALLOCATE(fxc)

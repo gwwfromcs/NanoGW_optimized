@@ -63,7 +63,7 @@ program sigma
   type (siginfo), dimension(:,:), allocatable :: sig
   type (qpinfo), dimension(:,:,:), allocatable :: q_p
 
-  character (len=20), allocatable :: routnam(:)
+  character (len=40), allocatable :: routnam(:)
 
   logical :: nolda, tamm_d, snorm, writeqp, readvxc, &
        readocc, cohsex, nooffd, init_gr, hqp_sym, lstop
@@ -86,7 +86,7 @@ program sigma
            ihomo, ikp, intp_type, isdf_type, kflag
   ! cvt.f90
   integer, allocatable :: intp(:), pairmap(:,:,:,:), invpairmap(:,:,:,:), &
-           ni(:), nj(:), nij(:), iilist(:,:), ijlist(:,:)
+           ni(:), nj(:), nij(:), iilist(:,:), ijlist(:,:), timerlist(:)
 
   ! WG debug
   integer :: outdbg
@@ -735,21 +735,26 @@ program sigma
   ! Time accounting.
   !
   ii = 9
-  ik = 3
+  ik = 7
   allocate(routnam(ii+ik))
-  routnam(1)='SETUP_S:'
-  routnam(2)='KERNEL:'
-  routnam(3)='DIAG_POL:'
-  routnam(4)='WPOL_0:'
-  routnam(5)='EXCHANGE:'
-  routnam(6)='POTENTIAL:'
-  routnam(7)='CORRELATION:'
-  routnam(8)='VERTEX:'
-  routnam(9)='ROTATE:'
+  allocate(timerlist(ii+ik))
+  routnam(1)='SETUP_S:'      ; timerlist(1)=2
+  routnam(2)='KERNEL:'       ; timerlist(2)=3
+  routnam(3)='DIAG_POL:'     ; timerlist(3)=4
+  routnam(4)='WPOL_0:'       ; timerlist(4)=5
+  routnam(5)='EXCHANGE:'     ; timerlist(5)=6
+  routnam(6)='POTENTIAL:'    ; timerlist(6)=7
+  routnam(7)='CORRELATION:'  ; timerlist(7)=8
+  routnam(8)='VERTEX:'       ; timerlist(8)=9
+  routnam(9)='ROTATE:'       ; timerlist(9)=10
 
-  routnam(10)='POISSON_FFT:'
-  routnam(11)='EIGENSOLVER:'
-  routnam(12)='INTEGRATION:'
+  routnam(10)='POISSON_FFT:'       ; timerlist(10)=11
+  routnam(11)='EIGENSOLVER:'       ; timerlist(11)=12
+  routnam(12)='INTEGRATION:'       ; timerlist(12)=13
+  routnam(13)='Find intp pts:'     ; timerlist(13)=51
+  routnam(14)='ISDF_PARALLEL:'     ; timerlist(14)=52
+  routnam(15)='Calc intp vectors:' ; timerlist(15)=53
+  routnam(16)='Calc <zeta|K|zeta>:'; timerlist(16)=54
 
   call timacc(1,2,tsec)
   call finalize(peinf%master,peinf%comm,ii,ik,routnam)

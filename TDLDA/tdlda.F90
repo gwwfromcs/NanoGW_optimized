@@ -46,7 +46,7 @@ program tdlda
   type (kernelinfo), allocatable :: k_p(:,:)
 
   character (len=800) :: lastwords
-  character (len=20), allocatable :: routnam(:)
+  character (len=40), allocatable :: routnam(:)
   logical :: nolda, tamm_d, rpaonly, trip_flag, noxchange, trunc_c, init_gr
   integer :: ii, jj, isp, irp, iq, nspin, nmap, nbuff, lcache, dft_code
   real(dp) :: tsec(2), mem1, xsum, xmax, tdldacut
@@ -67,7 +67,7 @@ program tdlda
            ihomo, ikp, intp_type, isdf_type, kflag
   ! cvt.f90
   integer, allocatable :: intp(:), pairmap(:,:,:,:), invpairmap(:,:,:,:), &
-           ncv(:), ivlist(:,:), iclist(:,:), nv(:), nc(:)
+           ncv(:), ivlist(:,:), iclist(:,:), nv(:), nc(:), timerlist(:)
 
   ! WG debug
   integer :: outdbg
@@ -175,6 +175,7 @@ program tdlda
      allocate(intp(n_intp))
      intp(1:n_intp) = 0
      ! --- find interpolation points for ISDF method ---
+     call timacc(51,1,tsec)
      call stopwatch(peinf%master, "before call cvt")
      if(intp_type .eq. 1) then
         if (peinf%master) then
@@ -188,6 +189,7 @@ program tdlda
         write(*,*) 'Type',intp_type,'method for finding interpolation points is',&
            ' not implememted so far. The default method will be used.'
      endif
+     call timacc(51,2,tsec)
      call stopwatch(peinf%master, "after call cvt")
      call MPI_BARRIER(peinf%comm,info)
       
@@ -301,6 +303,7 @@ program tdlda
      allocate(Mmtrx(n_intp, n_intp, nspin, nspin, kpt%nk, 2)) 
      ! Mmtrx is intialized to zero in isdf_parallel.f90
      verbose = .FALSE.
+     call timacc(52,1,tsec)
      if(isdf_type == 1 ) then
        write(6,*) " Call isdf_parallel()"
        call isdf_parallel(gvec, pol_in, kpt, n_intp, intp, &
@@ -314,6 +317,7 @@ program tdlda
          kflag, Cmtrx, Mmtrx, verbose)
      endif
      if(peinf%master) write(*,*) 'done isdf'
+     call timacc(52,2,tsec)
      call stopwatch(peinf%master, "after call isdf")
   endif
 
@@ -423,18 +427,24 @@ program tdlda
   ! Time accounting.
   !
   ii = 3
-  jj = 3
+  jj = 7
   allocate(routnam(ii+jj))
-  routnam(1)='SETUP_T:'
-  routnam(2)='KERNEL:'
-  routnam(3)='DIAG_POL:'
+  allocate(timerlist(ii+jj))
+  routnam(1)='SETUP_T:'      ; timerlist(1)=2
+  routnam(2)='KERNEL:'       ; timerlist(2)=3
+  routnam(3)='DIAG_POL:'     ; timerlist(3)=4
 
-  routnam(4)='POISSON_FFT:'
-  routnam(5)='EIGENSOLVER:'
-  routnam(6)='INTEGRATION:'
+  routnam(4)='POISSON_FFT:'         ; timerlist(4)=11
+  routnam(5)='EIGENSOLVER:'         ; timerlist(5)=12
+  routnam(6)='INTEGRATION:'         ; timerlist(6)=13
+  routnam(7)='Find intp pts:'       ; timerlist(7)=51
+  routnam(8)='ISDF_PARALLEL:'       ; timerlist(8)=52
+  routnam(9)='Calc intp vectors:'   ; timerlist(9)=53
+  routnam(10)='Calc <zeta|K|zeta>:' ; timerlist(10)=54
+
 
   call timacc(1,2,tsec)
-  call finalize(peinf%master,peinf%comm,ii,jj,routnam)
+  call finalize(peinf%master,peinf%comm,ii,jj,routnam,timerlist)
 
 end program tdlda
 !===================================================================
