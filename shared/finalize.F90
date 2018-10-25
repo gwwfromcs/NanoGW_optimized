@@ -41,7 +41,7 @@ subroutine finalize(verbose,comm,count1,count2,routnam,timerlist)
 
 !-------------------------------------------------------------------
 
-  if (verbose) write(6,'(/,a,/,28x,a10,3x,a10,4x,a8,/)') &
+  if (verbose) write(6,'(/,a,/,48x,a10,3x,a10,4x,a8,/)') &
        repeat('-',65), 'CPU [s]', 'WALL [s]', '#'
   do ii = 1, count1 + count2
      if (ii == count1 .and. verbose) write(6,*)
@@ -55,9 +55,9 @@ subroutine finalize(verbose,comm,count1,count2,routnam,timerlist)
 #ifdef MPI
         write(6,'(1x,a40,a,f10.3,3x,f10.3)') &
              routnam(ii), '( min. )', tmin(1), tmin(2)
-        write(6,'(21x,a,f10.3,3x,f10.3,3x,i8)') &
+        write(6,'(41x,a,f10.3,3x,f10.3,3x,i8)') &
              '(master)', tsec(1), tsec(2), jj
-        write(6,'(21x,a,f10.3,3x,f10.3)') '( max. )', tmax(1), tmax(2)
+        write(6,'(41x,a,f10.3,3x,f10.3)') '( max. )', tmax(1), tmax(2)
 #else
         write(6,'(1x,a40,8x,f10.3,3x,f10.3,3x,i8)') &
              routnam(ii), tsec(1), tsec(2), jj
@@ -73,12 +73,12 @@ subroutine finalize(verbose,comm,count1,count2,routnam,timerlist)
 
   if (verbose) then
 #ifdef MPI
-     write(6,'(/,1x,a20,a,f10.3,3x,f10.3)') &
+     write(6,'(/,1x,a40,a,f10.3,3x,f10.3)') &
           'TOTAL', '( min. )', tmin(1), tmin(2)
-     write(6,'(21x,a,f10.3,3x,f10.3)') '(master)', tsec(1), tsec(2)
-     write(6,'(21x,a,f10.3,3x,f10.3,/)') '( max. )', tmax(1), tmax(2)
+     write(6,'(41x,a,f10.3,3x,f10.3)') '(master)', tsec(1), tsec(2)
+     write(6,'(41x,a,f10.3,3x,f10.3,/)') '( max. )', tmax(1), tmax(2)
 #else
-     write(6,'(/,1x,a20,8x,f10.3,3x,f10.3,/)') &
+     write(6,'(/,1x,a40,8x,f10.3,3x,f10.3,/)') &
           'TOTAL', tsec(1), tsec(2)
 #endif
      call get_date(datelabel)

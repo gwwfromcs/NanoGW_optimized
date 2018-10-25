@@ -198,6 +198,7 @@ program sigma
      allocate(intp(n_intp))
      ! --- find interpolation points for ISDF method ---
      call stopwatch(peinf%master, "before call cvt")
+     call timacc(51,1,tsec)
      if(intp_type .eq. 1) then
         if (peinf%master) then
            write(*,*) " intp_type == 1"
@@ -210,6 +211,7 @@ program sigma
         write(*,*) 'Type',intp_type,'method for finding interpolation points is',&
            ' not implememted so far. The default method will be used.'
      endif
+     call timacc(51,2,tsec)
      call stopwatch(peinf%master, "after call cvt")
      call MPI_BARRIER(peinf%comm, info)
     
@@ -432,6 +434,7 @@ program sigma
     call stopwatch(peinf%master, "before call isdf")
     kflag = 1
     if ( nolda ) kflag = 0
+    call timacc(52,1,tsec)
     if ( isdf_type == 1 ) then
       write(6,*) " Call isdf_parallel()"
       call isdf_parallel(gvec, pol_in, kpt, n_intp, intp, &
@@ -445,6 +448,7 @@ program sigma
     endif
     if(peinf%master) write(*,*) 'done isdf'
     call MPI_BARRIER(peinf%comm, info)
+    call timacc(52,2,tsec)
     call stopwatch(peinf%master, "after call isdf")
   endif
   ! The outputs are Cmtrx and Mmtrx, which are used by k_integrate_isdf() for
@@ -757,7 +761,7 @@ program sigma
   routnam(16)='Calc <zeta|K|zeta>:'; timerlist(16)=54
 
   call timacc(1,2,tsec)
-  call finalize(peinf%master,peinf%comm,ii,ik,routnam)
+  call finalize(peinf%master,peinf%comm,ii,ik,routnam, timerlist)
 
 end program sigma
 !===================================================================

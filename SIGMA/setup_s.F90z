@@ -95,7 +95,7 @@ subroutine Zsetup_s(gvec,kpt,qpt,kpt_sig,sig_in,sig,pol_in,pol,k_p,k_c, &
      call die('Stop')
   endif
   deallocate(map_c)
-
+   
   !-------------------------------------------------------------------
   ! Search for k-points in kpt structure.
   !

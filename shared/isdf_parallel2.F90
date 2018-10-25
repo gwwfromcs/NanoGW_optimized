@@ -304,7 +304,7 @@ subroutine isdf_parallel2( gvec, pol_in, kpt, n_intp, intp, &
            do icv = 1, ncv(isp)
               IVV = invpairmap(1,icv,isp,ikp)
               ICC = invpairmap(2,icv,isp,ikp)
-              Cmtrx(1:n_intp, icv, isp, kpt%nk) = PsiV_intp(1:n_intp, inv_ivlist(IVV,isp)) * &
+              Cmtrx(1:n_intp, icv, isp, ikp) = PsiV_intp(1:n_intp, inv_ivlist(IVV,isp)) * &
                 PsiC_intp(1:n_intp, inv_iclist(ICC,isp)) ! This is element-wise multiplication
            enddo
            !

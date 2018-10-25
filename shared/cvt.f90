@@ -50,6 +50,21 @@ subroutine cvt(gvec, rho, nspin, n_intp, intp)
  ! get the charge density on the full grid
  allocate(fullrho(gvec%nr * gvec%syms%ntrans))
  allocate(icenter(gvec%nr * gvec%syms%ntrans))
+!#ifdef DEBUG
+ ! print out the grid points in reduced zone
+ if (.True.) then
+    itran = 1 
+    write(outdbg, '("r-space points in reduced domain: ")')
+    do ipt = 1, gvec%nr
+       call unfold(gvec%r(1,ipt), &
+         gvec%syms%trans(1,1,itran), gvec%shift(1), pt_tmp(1))
+       do ii = 1,3
+         pt_tmp(ii) = ( pt_tmp(ii) + gvec%shift(ii) ) * gvec%step(ii)
+       enddo
+       write(outdbg, '(3f9.4)') pt_tmp(1:3)
+    enddo
+ endif
+!#endif
  igrid = 0 ! counter for full-grid points
  do ipt = 1, gvec%nr 
     do itran = 1, gvec%syms%ntrans

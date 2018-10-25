@@ -175,8 +175,8 @@ program tdlda
      allocate(intp(n_intp))
      intp(1:n_intp) = 0
      ! --- find interpolation points for ISDF method ---
-     call timacc(51,1,tsec)
      call stopwatch(peinf%master, "before call cvt")
+     call timacc(51,1,tsec)
      if(intp_type .eq. 1) then
         if (peinf%master) then
            write(*,*) " intp_type == 1"
